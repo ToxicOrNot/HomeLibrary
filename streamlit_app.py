@@ -2,6 +2,7 @@ import html
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlencode
 
 import streamlit as st
 
@@ -191,6 +192,46 @@ def apply_compact_style():
             margin-top: 0.25rem;
           }
 
+          .book-actions {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            gap: 0.35rem;
+            align-items: center;
+            margin: -0.05rem 0 0.35rem;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+
+          .book-actions a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            min-width: 2.1rem;
+            height: 2rem;
+            padding: 0 0.55rem;
+            border: 1px solid #d8dee7;
+            border-radius: 6px;
+            background: #f8fafc;
+            color: #1f2933 !important;
+            text-decoration: none !important;
+            font-weight: 700;
+            line-height: 1;
+          }
+
+          .book-actions a.danger {
+            color: #b42318 !important;
+            background: #fff1ef;
+            border-color: #f4c7c0;
+          }
+
+          .book-actions a.success {
+            color: #1f7a4c !important;
+            background: #e4f3eb;
+            border-color: #b7dfc8;
+          }
+
           hr {
             margin: 0.25rem 0 0.45rem !important;
           }
@@ -289,6 +330,46 @@ def edit_book_form(data, target, index):
             rerun()
 
 
+def action_url(action, target, index):
+    return "?" + urlencode({"action": action, "target": target, "index": index})
+
+
+def handle_action_params(data):
+    action = st.query_params.get("action")
+    target = st.query_params.get("target")
+    raw_index = st.query_params.get("index")
+
+    if not action or target not in VALID_LISTS or raw_index is None:
+        return
+
+    try:
+        index = int(raw_index)
+    except (TypeError, ValueError):
+        st.query_params.clear()
+        rerun()
+        return
+
+    if index < 0 or index >= len(data[target]):
+        st.query_params.clear()
+        rerun()
+        return
+
+    if action == "up":
+        reorder_in_series(data, target, index, "up")
+    elif action == "down":
+        reorder_in_series(data, target, index, "down")
+    elif action == "edit":
+        st.session_state["edit"] = (target, index)
+    elif action == "move" and target == "wishlist":
+        move_between_lists(data, index)
+    elif action == "delete":
+        del data[target][index]
+        save_data(data)
+
+    st.query_params.clear()
+    rerun()
+
+
 def render_book(data, target, index, book):
     title = html.escape(book["title"])
     meta = " · ".join(part for part in [book["author"], book["year"]] if part)
@@ -305,23 +386,23 @@ def render_book(data, target, index, book):
         unsafe_allow_html=True,
     )
 
-    cols = st.columns([0.55, 0.55, 0.75, 0.85, 0.65, 5])
-    if cols[0].button("↑", key=f"up_{target}_{index}", help="Поднять"):
-        reorder_in_series(data, target, index, "up")
-        rerun()
-    if cols[1].button("↓", key=f"down_{target}_{index}", help="Опустить"):
-        reorder_in_series(data, target, index, "down")
-        rerun()
-    if cols[2].button("✎", key=f"edit_btn_{target}_{index}", help="Редактировать"):
-        st.session_state["edit"] = (target, index)
-        rerun()
-    if target == "wishlist" and cols[3].button("✓", key=f"move_{index}", help="В библиотеку"):
-        move_between_lists(data, index)
-        rerun()
-    if cols[4].button("×", key=f"delete_{target}_{index}", help="Удалить"):
-        del data[target][index]
-        save_data(data)
-        rerun()
+    move_action = (
+        f'<a class="success" href="{action_url("move", target, index)}" title="В библиотеку">✓</a>'
+        if target == "wishlist"
+        else ""
+    )
+    st.markdown(
+        f"""
+        <div class="book-actions">
+          <a href="{action_url("up", target, index)}" title="Поднять">↑</a>
+          <a href="{action_url("down", target, index)}" title="Опустить">↓</a>
+          <a href="{action_url("edit", target, index)}" title="Редактировать">✎</a>
+          {move_action}
+          <a class="danger" href="{action_url("delete", target, index)}" title="Удалить">×</a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     if st.session_state.get("edit") == (target, index):
         edit_book_form(data, target, index)
@@ -398,6 +479,7 @@ def main():
     st.title("Домашняя библиотека")
 
     data = load_data()
+    handle_action_params(data)
     st.caption(f"В библиотеке: {len(data['owned'])} | В желаемом: {len(data['wishlist'])}")
 
     book_form(data)
