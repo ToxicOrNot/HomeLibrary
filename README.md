@@ -43,6 +43,22 @@ py web_library.py
 
 Приложение готово к запуску на Python-хостингах без внешних зависимостей.
 
+### Streamlit Cloud
+
+Для Streamlit Cloud запускайте файл:
+
+```text
+streamlit_app.py
+```
+
+В настройках Streamlit Cloud в поле `Main file path` укажите:
+
+```text
+streamlit_app.py
+```
+
+Не указывайте `web_library.py` для Streamlit Cloud: этот файл сам поднимает HTTP-сервер и подходит для Render/Railway/VPS, но Streamlit Cloud запускает свой сервер.
+
 ### Render
 
 1. Загрузите проект в GitHub.
