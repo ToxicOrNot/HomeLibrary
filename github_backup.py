@@ -8,17 +8,25 @@ from urllib.request import Request, urlopen
 
 
 DEFAULT_INTERVAL_SECONDS = 24 * 60 * 60
+LAST_STATUS = "GitHub backup has not run yet."
 
 
 def backup_if_due(data_file: Path, force: bool = False) -> bool:
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
-    repo = os.environ.get("GITHUB_REPOSITORY", os.environ.get("GITHUB_REPO", "")).strip()
-    if not token or not repo or not data_file.exists():
+    token = get_config("GITHUB_TOKEN")
+    repo = get_config("GITHUB_REPOSITORY") or get_config("GITHUB_REPO")
+    if not token:
+        set_status("GitHub backup skipped: GITHUB_TOKEN is not configured.")
+        return False
+    if not repo:
+        set_status("GitHub backup skipped: GITHUB_REPOSITORY is not configured.")
+        return False
+    if not data_file.exists():
+        set_status(f"GitHub backup skipped: data file does not exist: {data_file}")
         return False
 
-    interval = int(os.environ.get("GITHUB_BACKUP_INTERVAL_SECONDS", DEFAULT_INTERVAL_SECONDS))
+    interval = int(get_config("GITHUB_BACKUP_INTERVAL_SECONDS", str(DEFAULT_INTERVAL_SECONDS)))
     state_file = Path(
-        os.environ.get(
+        get_config(
             "GITHUB_BACKUP_STATE_FILE",
             data_file.with_name(".last_github_backup").as_posix(),
         )
@@ -31,17 +39,48 @@ def backup_if_due(data_file: Path, force: bool = False) -> bool:
         last_backup = 0
 
     if not force and now - last_backup < interval:
+        set_status("GitHub backup skipped: interval has not elapsed.")
         return False
 
-    branch = os.environ.get("GITHUB_BRANCH", "main").strip()
-    backup_path = os.environ.get("GITHUB_BACKUP_PATH", default_backup_path(data_file)).strip()
+    branch = get_config("GITHUB_BRANCH", "main")
+    backup_path = get_config("GITHUB_BACKUP_PATH", default_backup_path(data_file))
     content = data_file.read_bytes()
     sha = get_remote_sha(token, repo, backup_path, branch)
     upload_backup(token, repo, backup_path, branch, content, sha)
 
     state_file.parent.mkdir(parents=True, exist_ok=True)
     state_file.write_text(str(now), encoding="utf-8")
+    set_status(f"GitHub backup completed: {repo}/{backup_path}.")
     return True
+
+
+def get_config(name: str, default: str = "") -> str:
+    value = os.environ.get(name)
+    if value:
+        return str(value).strip()
+
+    try:
+        import streamlit as st
+
+        if name in st.secrets:
+            return str(st.secrets[name]).strip()
+
+        github_secrets = st.secrets.get("github", {})
+        if name in github_secrets:
+            return str(github_secrets[name]).strip()
+    except Exception:
+        pass
+
+    return default.strip()
+
+
+def set_status(message: str) -> None:
+    global LAST_STATUS
+    LAST_STATUS = message
+
+
+def get_last_backup_status() -> str:
+    return LAST_STATUS
 
 
 def github_request(token: str, url: str, method: str = "GET", payload: dict | None = None):
@@ -107,5 +146,10 @@ def upload_backup(
 def safe_backup_if_due(data_file: Path, force: bool = False) -> bool:
     try:
         return backup_if_due(data_file, force=force)
-    except (OSError, HTTPError, URLError, TimeoutError, json.JSONDecodeError):
+    except HTTPError as error:
+        details = error.read().decode("utf-8", errors="replace")
+        set_status(f"GitHub backup failed: HTTP {error.code}. {details[:300]}")
+        return False
+    except (OSError, URLError, TimeoutError, json.JSONDecodeError) as error:
+        set_status(f"GitHub backup failed: {error}")
         return False

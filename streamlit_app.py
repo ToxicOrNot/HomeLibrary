@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 
 import streamlit as st
 
-from github_backup import safe_backup_if_due
+from github_backup import get_last_backup_status, safe_backup_if_due
 
 DATA_DIR = Path(__file__).with_name("data")
 DATA_FILE = Path(os.environ.get("DATA_FILE", DATA_DIR / "library_data.json"))
@@ -55,7 +55,9 @@ def save_data(data):
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    safe_backup_if_due(DATA_FILE, force=True)
+    backup_done = safe_backup_if_due(DATA_FILE, force=True)
+    st.session_state["last_backup_status"] = get_last_backup_status()
+    st.session_state["last_backup_ok"] = backup_done
 
 
 def migrate_legacy_data_file():
@@ -458,8 +460,16 @@ def main():
 
     data = load_data()
     safe_backup_if_due(DATA_FILE)
+    st.session_state.setdefault("last_backup_status", get_last_backup_status())
+    st.session_state.setdefault("last_backup_ok", None)
     handle_action_params(data)
     st.caption(f"В библиотеке: {len(data['owned'])} | В желаемом: {len(data['wishlist'])}")
+    backup_status = st.session_state.get("last_backup_status", "")
+    if backup_status:
+        if st.session_state.get("last_backup_ok") is False:
+            st.warning(backup_status)
+        else:
+            st.caption(backup_status)
 
     book_form(data)
 

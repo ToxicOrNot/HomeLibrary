@@ -60,6 +60,17 @@ streamlit_app.py
 
 Не указывайте `web_library.py` для Streamlit Cloud: этот файл сам поднимает HTTP-сервер и подходит для Render/Railway/VPS, но Streamlit Cloud запускает свой сервер.
 
+GitHub-бэкап на Streamlit Cloud настраивается в `Manage app` → `Settings` → `Secrets`:
+
+```toml
+GITHUB_TOKEN = "ваш_новый_токен"
+GITHUB_REPOSITORY = "owner/repo"
+GITHUB_BRANCH = "main"
+GITHUB_BACKUP_PATH = "data/library_data.json"
+```
+
+После добавления книги приложение показывает статус последнего GitHub-бэкапа над списком книг.
+
 ### Render
 
 1. Загрузите проект в GitHub.
