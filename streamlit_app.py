@@ -25,7 +25,10 @@ def normalize_book(item):
         "year": str(item.get("year", "")).strip(),
         "series": str(item.get("series", "")).strip(),
         "note": str(item.get("note", "")).strip(),
-        "rating": normalize_rating(item.get("rating", "")),
+        "rating_penguin": normalize_rating(
+            item.get("rating_penguin", item.get("rating", ""))
+        ),
+        "rating_chick": normalize_rating(item.get("rating_chick", "")),
     }
 
 
@@ -401,7 +404,8 @@ def book_form(data):
                     "year": year,
                     "series": series,
                     "note": note,
-                    "rating": "",
+                    "rating_penguin": "",
+                    "rating_chick": "",
                 }
             )
         )
@@ -420,11 +424,18 @@ def edit_book_form(data, target, index):
             series = cols[1].text_input("Цикл", value=book["series"], key=f"series_{target}_{index}")
             year = cols[2].text_input("Год", value=book["year"], key=f"year_{target}_{index}")
             note = st.text_input("Заметка", value=book["note"], key=f"note_{target}_{index}")
-            rating = st.selectbox(
-                "Оценка",
+            rating_options = [""] + [str(value) for value in range(1, 11)]
+            rating_penguin = st.selectbox(
+                "Пингвинчик",
+                rating_options,
+                index=rating_options.index(book.get("rating_penguin", "")),
+                key=f"rating_penguin_{target}_{index}",
+            )
+            rating_chick = st.selectbox(
+                "Цыпка",
                 [""] + [str(value) for value in range(1, 11)],
-                index=([""] + [str(value) for value in range(1, 11)]).index(book.get("rating", "")),
-                key=f"rating_{target}_{index}",
+                index=rating_options.index(book.get("rating_chick", "")),
+                key=f"rating_chick_{target}_{index}",
             )
             submitted = st.form_submit_button("Сохранить")
         if submitted:
@@ -438,7 +449,8 @@ def edit_book_form(data, target, index):
                     "series": series,
                     "year": year,
                     "note": note,
-                    "rating": rating,
+                    "rating_penguin": rating_penguin,
+                    "rating_chick": rating_chick,
                 }
             )
             save_data(data)
@@ -498,17 +510,27 @@ def render_book(data, target, index, book):
             st.write(book["note"])
 
         rating_options = [""] + [str(value) for value in range(1, 11)]
-        current_rating = normalize_rating(book.get("rating", ""))
-        selected_rating = st.selectbox(
-            "Оценка",
+        rating_cols = st.columns(2)
+        current_penguin = normalize_rating(book.get("rating_penguin", ""))
+        selected_penguin = rating_cols[0].selectbox(
+            "Пингвинчик",
             rating_options,
-            index=rating_options.index(current_rating),
-            key=f"rating_select_{target}_{index}_{current_rating}",
-            label_visibility="collapsed",
-            placeholder="Оценка",
+            index=rating_options.index(current_penguin),
+            key=f"rating_penguin_select_{target}_{index}_{current_penguin}",
         )
-        if selected_rating != current_rating:
-            data[target][index]["rating"] = selected_rating
+        current_chick = normalize_rating(book.get("rating_chick", ""))
+        selected_chick = rating_cols[1].selectbox(
+            "Цыпка",
+            rating_options,
+            index=rating_options.index(current_chick),
+            key=f"rating_chick_select_{target}_{index}_{current_chick}",
+        )
+        if selected_penguin != current_penguin:
+            data[target][index]["rating_penguin"] = selected_penguin
+            save_data(data)
+            rerun()
+        if selected_chick != current_chick:
+            data[target][index]["rating_chick"] = selected_chick
             save_data(data)
             rerun()
 

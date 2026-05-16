@@ -12,10 +12,9 @@
 - алфавитная сортировка авторов и циклов;
 - порядок книг внутри цикла по добавлению;
 - ручное изменение порядка книг внутри одного цикла;
-- группировка списков по автору или циклу;
 - выпадающие подсказки существующих авторов и циклов;
 - фильтрация циклов по выбранному автору;
-- оценка книг от 1 до 10;
+- две оценки книг от 1 до 10: `Пингвинчик` и `Цыпка`;
 - редактирование уже добавленных книг;
 - удаление книг из любого списка;
 - перенос книги из желаемого в библиотеку;
@@ -43,34 +42,7 @@ py web_library.py
 
 ## Размещение на хостинге
 
-Приложение готово к запуску на Python-хостингах без внешних зависимостей.
-
-### Streamlit Cloud
-
-Для Streamlit Cloud запускайте файл:
-
-```text
-streamlit_app.py
-```
-
-В настройках Streamlit Cloud в поле `Main file path` укажите:
-
-```text
-streamlit_app.py
-```
-
-Не указывайте `web_library.py` для Streamlit Cloud: этот файл сам поднимает HTTP-сервер и подходит для Render/Railway/VPS, но Streamlit Cloud запускает свой сервер.
-
-GitHub-бэкап на Streamlit Cloud настраивается в `Manage app` → `Settings` → `Secrets`:
-
-```toml
-GITHUB_TOKEN = "ваш_новый_токен"
-GITHUB_REPOSITORY = "owner/repo"
-GITHUB_BRANCH = "main"
-GITHUB_BACKUP_PATH = "data/library_data.json"
-```
-
-После добавления книги приложение показывает статус последнего GitHub-бэкапа над списком книг.
+Основное приложение для хостинга — `web_library.py`. Оно использует тот же интерфейс, что и локальный сервер.
 
 ### Render
 
@@ -82,6 +54,8 @@ GITHUB_BACKUP_PATH = "data/library_data.json"
    - Build command: `pip install -r requirements.txt`
    - Start command: `python web_library.py`
 5. После деплоя откройте выданный Render URL.
+
+В репозитории также есть `render.yaml`, поэтому Render может подхватить настройки автоматически.
 
 ### Railway
 

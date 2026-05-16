@@ -286,6 +286,14 @@ INDEX_HTML = """<!doctype html>
       background: #fff;
     }
 
+    .rating-field {
+      display: grid;
+      gap: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
     .book-group {
       display: grid;
       gap: 10px;
@@ -320,6 +328,14 @@ INDEX_HTML = """<!doctype html>
       min-height: 36px;
       padding: 7px 10px;
       font-size: 14px;
+    }
+
+    .icon-button {
+      width: 36px;
+      min-width: 36px;
+      padding: 7px 0;
+      font-size: 17px;
+      line-height: 1;
     }
 
     .empty {
@@ -568,6 +584,20 @@ INDEX_HTML = """<!doctype html>
         const moveButton = target === "wishlist"
           ? `<button class="success" type="button" data-action="move" data-index="${index}">Перенести в библиотеку</button>`
           : "";
+        const ratingControls = target === "owned"
+          ? `
+              <label class="rating-field">Пингвинчик
+                <select class="rating-select" data-action="rating" data-rating-field="rating_penguin" data-target="${target}" data-index="${index}" title="Пингвинчик">
+                  ${ratingOptions(book.rating_penguin)}
+                </select>
+              </label>
+              <label class="rating-field">Цыпка
+                <select class="rating-select" data-action="rating" data-rating-field="rating_chick" data-target="${target}" data-index="${index}" title="Цыпка">
+                  ${ratingOptions(book.rating_chick)}
+                </select>
+              </label>
+            `
+          : "";
         return `
           <div class="book">
             <h3 class="book-title">${escapeText(book.title)}</h3>
@@ -575,14 +605,12 @@ INDEX_HTML = """<!doctype html>
             ${series}
             ${book.note ? `<div class="note">${escapeText(book.note)}</div>` : ""}
             <div class="book-actions">
-              <select class="rating-select" data-action="rating" data-target="${target}" data-index="${index}" title="Оценка">
-                ${ratingOptions(book.rating)}
-              </select>
+              ${ratingControls}
               ${moveButton}
-              <button type="button" data-action="order-up" data-target="${target}" data-index="${index}">Вверх</button>
-              <button type="button" data-action="order-down" data-target="${target}" data-index="${index}">Вниз</button>
-              <button type="button" data-action="edit" data-target="${target}" data-index="${index}">Редактировать</button>
-              <button class="danger" type="button" data-action="delete" data-target="${target}" data-index="${index}">Удалить</button>
+              <button class="icon-button" type="button" data-action="order-up" data-target="${target}" data-index="${index}" title="Вверх" aria-label="Вверх">↑</button>
+              <button class="icon-button" type="button" data-action="order-down" data-target="${target}" data-index="${index}" title="Вниз" aria-label="Вниз">↓</button>
+              <button class="icon-button" type="button" data-action="edit" data-target="${target}" data-index="${index}" title="Редактировать" aria-label="Редактировать">✎</button>
+              <button class="icon-button danger" type="button" data-action="delete" data-target="${target}" data-index="${index}" title="Удалить" aria-label="Удалить">🗑</button>
             </div>
           </div>
         `;
@@ -736,10 +764,10 @@ INDEX_HTML = """<!doctype html>
       return "";
     }
 
-    async function rateBook(target, index, rating) {
+    async function rateBook(target, index, field, rating) {
       await requestJson("/api/rating", {
         method: "POST",
-        body: JSON.stringify({ target, index, rating })
+        body: JSON.stringify({ target, index, field, rating })
       });
       await loadBooks();
       showToast("Оценка сохранена");
@@ -876,6 +904,7 @@ INDEX_HTML = """<!doctype html>
       rateBook(
         select.dataset.target,
         Number(select.dataset.index),
+        select.dataset.ratingField,
         select.value
       ).catch((error) => showToast(error.message));
     });
@@ -903,7 +932,10 @@ def normalize_book(item):
         "year": str(item.get("year", "")).strip(),
         "series": str(item.get("series", "")).strip(),
         "note": str(item.get("note", "")).strip(),
-        "rating": normalize_rating(item.get("rating", "")),
+        "rating_penguin": normalize_rating(
+            item.get("rating_penguin", item.get("rating", ""))
+        ),
+        "rating_chick": normalize_rating(item.get("rating_chick", "")),
     }
 
 
@@ -1177,7 +1209,12 @@ class LibraryHandler(BaseHTTPRequestHandler):
             self.send_json({"error": "Book not found"}, status=HTTPStatus.NOT_FOUND)
             return
 
-        data[target][index]["rating"] = normalize_rating(body.get("rating", ""))
+        field = body.get("field")
+        if field not in {"rating_penguin", "rating_chick"}:
+            self.send_json({"error": "Unknown rating field"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        data[target][index][field] = normalize_rating(body.get("rating", ""))
         save_data(data)
         self.send_json(data)
 
