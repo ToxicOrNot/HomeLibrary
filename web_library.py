@@ -35,16 +35,50 @@ INDEX_HTML = """<!doctype html>
   <style>
     :root {
       color-scheme: light;
-      --bg: #f5f3ef;
+      --bg: #f4f4f5;
       --panel: #ffffff;
-      --text: #1f2933;
-      --muted: #64748b;
-      --line: #d8dee7;
-      --primary: #2457a6;
-      --primary-dark: #183f7a;
+      --text: #27272a;
+      --muted: #71717a;
+      --line: #d4d4d8;
+      --field: #ffffff;
+      --button: #e4e4e7;
+      --book: #ffffff;
+      --soft: #e4e4e7;
+      --note: #52525b;
+      --success-bg: #e4f3eb;
+      --success-line: #b7dfc8;
+      --danger-bg: #fff1ef;
+      --danger-line: #f4c7c0;
+      --focus: rgba(75, 85, 99, 0.18);
+      --primary: #374151;
+      --primary-dark: #111827;
       --danger: #b42318;
       --ok: #1f7a4c;
       --shadow: 0 10px 28px rgba(31, 41, 51, 0.08);
+    }
+
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #18181b;
+      --panel: #27272a;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --line: #52525b;
+      --field: #18181b;
+      --button: #3f3f46;
+      --book: #202023;
+      --soft: #3f3f46;
+      --note: #d4d4d8;
+      --success-bg: #173727;
+      --success-line: #2f6848;
+      --danger-bg: #3b1d1d;
+      --danger-line: #704040;
+      --focus: rgba(203, 213, 225, 0.22);
+      --primary: #d1d5db;
+      --primary-dark: #f9fafb;
+      --danger: #fca5a5;
+      --ok: #86efac;
+      --shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
     }
 
     * {
@@ -85,6 +119,21 @@ INDEX_HTML = """<!doctype html>
       text-align: right;
     }
 
+    .header-actions {
+      display: grid;
+      justify-items: end;
+      gap: 8px;
+    }
+
+    .theme-toggle {
+      min-height: 34px;
+      padding: 6px 10px;
+      border-color: var(--line);
+      color: var(--text);
+      background: var(--button);
+      font-size: 13px;
+    }
+
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
@@ -120,13 +169,13 @@ INDEX_HTML = """<!doctype html>
       padding: 9px 11px;
       color: var(--text);
       font: inherit;
-      background: #fff;
+      background: var(--field);
     }
 
     input:focus,
     select:focus {
       border-color: var(--primary);
-      outline: 2px solid rgba(36, 87, 166, 0.16);
+      outline: 2px solid var(--focus);
     }
 
     .form-actions {
@@ -147,7 +196,7 @@ INDEX_HTML = """<!doctype html>
       font: inherit;
       font-weight: 650;
       cursor: pointer;
-      background: #eef2f7;
+      background: var(--button);
       color: var(--text);
     }
 
@@ -160,21 +209,26 @@ INDEX_HTML = """<!doctype html>
       color: #fff;
     }
 
+    [data-theme="dark"] .primary,
+    [data-theme="dark"] .tabs .active {
+      color: #111827;
+    }
+
     .primary:hover {
       background: var(--primary-dark);
       filter: none;
     }
 
     .success {
-      background: #e4f3eb;
+      background: var(--success-bg);
       color: var(--ok);
-      border-color: #b7dfc8;
+      border-color: var(--success-line);
     }
 
     .danger {
-      background: #fff1ef;
+      background: var(--danger-bg);
       color: var(--danger);
-      border-color: #f4c7c0;
+      border-color: var(--danger-line);
     }
 
     .tabs {
@@ -251,7 +305,7 @@ INDEX_HTML = """<!doctype html>
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 12px;
-      background: #fff;
+      background: var(--book);
     }
 
     .book-title {
@@ -269,7 +323,7 @@ INDEX_HTML = """<!doctype html>
 
     .note {
       margin-top: 7px;
-      color: #475569;
+      color: var(--note);
       font-size: 14px;
       overflow-wrap: anywhere;
     }
@@ -289,7 +343,7 @@ INDEX_HTML = """<!doctype html>
       padding: 6px 8px;
       font: inherit;
       font-size: 14px;
-      background: #fff;
+      background: var(--field);
     }
 
     .rating-field {
@@ -309,8 +363,8 @@ INDEX_HTML = """<!doctype html>
       margin: 4px 0 0;
       padding: 8px 10px;
       border-radius: 7px;
-      background: #eef2f7;
-      color: #334155;
+      background: var(--soft);
+      color: var(--text);
       font-size: 14px;
       font-weight: 750;
     }
@@ -320,7 +374,7 @@ INDEX_HTML = """<!doctype html>
       gap: 8px;
       margin-left: 14px;
       padding-left: 12px;
-      border-left: 2px solid #d8dee7;
+      border-left: 2px solid var(--line);
     }
 
     .series-heading {
@@ -328,7 +382,7 @@ INDEX_HTML = """<!doctype html>
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      color: #475569;
+      color: var(--note);
       font-size: 14px;
       font-weight: 750;
       margin-top: 2px;
@@ -350,13 +404,13 @@ INDEX_HTML = """<!doctype html>
       padding: 4px 7px;
       font: inherit;
       font-size: 13px;
-      background: #fff;
+      background: var(--field);
     }
 
     .complete-badge {
       padding: 4px 7px;
       border-radius: 7px;
-      background: #e4f3eb;
+      background: var(--success-bg);
       color: var(--ok);
       font-size: 12px;
       font-weight: 800;
@@ -374,8 +428,8 @@ INDEX_HTML = """<!doctype html>
       padding: 10px;
       border: 1px solid var(--line);
       border-radius: 7px;
-      background: #f8fafc;
-      color: #475569;
+      background: var(--soft);
+      color: var(--note);
       font-size: 14px;
     }
 
@@ -437,7 +491,7 @@ INDEX_HTML = """<!doctype html>
       max-width: min(520px, calc(100% - 32px));
       padding: 10px 14px;
       border-radius: 7px;
-      background: #172033;
+      background: #18181b;
       color: #fff;
       box-shadow: var(--shadow);
       opacity: 0;
@@ -494,6 +548,11 @@ INDEX_HTML = """<!doctype html>
         text-align: left;
       }
 
+      .header-actions {
+        justify-items: start;
+        margin-top: 8px;
+      }
+
       .form-grid {
         grid-template-columns: 1fr;
       }
@@ -536,7 +595,10 @@ INDEX_HTML = """<!doctype html>
       <div>
         <h1>Домашняя библиотека</h1>
       </div>
-      <div class="status" id="status">Загрузка...</div>
+      <div class="header-actions">
+        <button class="theme-toggle" type="button" id="themeToggle">Темная тема</button>
+        <div class="status" id="status">Загрузка...</div>
+      </div>
     </header>
 
     <section class="panel form-panel">
@@ -603,7 +665,7 @@ INDEX_HTML = """<!doctype html>
 
   <div class="toast" id="toast"></div>
   <button class="primary scroll-top" type="button" id="scrollTop" title="Наверх" aria-label="Наверх">
-    <img src="/icons/Arrow%20Big%20Up%20Lines.png?v={{ICON_VERSION}}" alt="">
+    <img id="scrollTopIcon" src="/icons/Arrow%20Big%20Up%20Lines.png?v={{ICON_VERSION}}" alt="">
   </button>
 
   <script>
@@ -612,7 +674,29 @@ INDEX_HTML = """<!doctype html>
     const form = document.getElementById("bookForm");
     const toast = document.getElementById("toast");
     const scrollTopButton = document.getElementById("scrollTop");
+    const scrollTopIcon = document.getElementById("scrollTopIcon");
+    const themeToggle = document.getElementById("themeToggle");
     let editing = null;
+
+    const iconVersion = "{{ICON_VERSION}}";
+    const icons = {
+      light: {
+        info: "Info%20Square%20Rounded.png",
+        up: "Arrow%20Big%20Up.png",
+        down: "Arrow%20Big%20Down.png",
+        edit: "Edit.png",
+        trash: "Trash.png",
+        top: "Arrow%20Big%20Up%20Lines.png"
+      },
+      dark: {
+        info: "Info.png",
+        up: "Arrow%20Big%20Up%201.png",
+        down: "Arrow%20Big%20Down%201.png",
+        edit: "Edit%201.png",
+        trash: "Trash%201.png",
+        top: "Arrow%20Big%20Up%20Lines%201.png"
+      }
+    };
 
     function allBooks() {
       return [...state.owned, ...state.wishlist];
@@ -624,6 +708,24 @@ INDEX_HTML = """<!doctype html>
       window.clearTimeout(showToast.timer);
       showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 2200);
     }
+
+    function currentTheme() {
+      return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+    }
+
+    function iconSrc(name) {
+      return `/icons/${icons[currentTheme()][name]}?v=${iconVersion}`;
+    }
+
+    function applyTheme(theme) {
+      const normalized = theme === "dark" ? "dark" : "light";
+      document.documentElement.dataset.theme = normalized;
+      localStorage.setItem("libraryTheme", normalized);
+      themeToggle.textContent = normalized === "dark" ? "Светлая тема" : "Темная тема";
+      scrollTopIcon.src = iconSrc("top");
+    }
+
+    applyTheme(localStorage.getItem("libraryTheme") || "dark");
 
     function pluralBooks(count) {
       const last = count % 10;
@@ -727,11 +829,11 @@ INDEX_HTML = """<!doctype html>
             <div class="book-actions">
               ${ratingControls}
               ${moveButton}
-              <button class="icon-button" type="button" data-action="info" data-target="${target}" data-index="${index}" title="LiveLib" aria-label="LiveLib"><img src="/icons/Info%20Square%20Rounded.png?v={{ICON_VERSION}}" alt=""></button>
-              <button class="icon-button" type="button" data-action="order-up" data-target="${target}" data-index="${index}" title="Вверх" aria-label="Вверх"><img src="/icons/Arrow%20Big%20Up.png?v={{ICON_VERSION}}" alt=""></button>
-              <button class="icon-button" type="button" data-action="order-down" data-target="${target}" data-index="${index}" title="Вниз" aria-label="Вниз"><img src="/icons/Arrow%20Big%20Down.png?v={{ICON_VERSION}}" alt=""></button>
-              <button class="icon-button" type="button" data-action="edit" data-target="${target}" data-index="${index}" title="Редактировать" aria-label="Редактировать"><img src="/icons/Edit.png?v={{ICON_VERSION}}" alt=""></button>
-              <button class="icon-button danger" type="button" data-action="delete" data-target="${target}" data-index="${index}" title="Удалить" aria-label="Удалить"><img src="/icons/Trash.png?v={{ICON_VERSION}}" alt=""></button>
+              <button class="icon-button" type="button" data-action="info" data-target="${target}" data-index="${index}" title="LiveLib" aria-label="LiveLib"><img src="${iconSrc("info")}" alt=""></button>
+              <button class="icon-button" type="button" data-action="order-up" data-target="${target}" data-index="${index}" title="Вверх" aria-label="Вверх"><img src="${iconSrc("up")}" alt=""></button>
+              <button class="icon-button" type="button" data-action="order-down" data-target="${target}" data-index="${index}" title="Вниз" aria-label="Вниз"><img src="${iconSrc("down")}" alt=""></button>
+              <button class="icon-button" type="button" data-action="edit" data-target="${target}" data-index="${index}" title="Редактировать" aria-label="Редактировать"><img src="${iconSrc("edit")}" alt=""></button>
+              <button class="icon-button danger" type="button" data-action="delete" data-target="${target}" data-index="${index}" title="Удалить" aria-label="Удалить"><img src="${iconSrc("trash")}" alt=""></button>
             </div>
             <div class="book-info" id="info-${target}-${index}" hidden></div>
           </div>
@@ -1082,6 +1184,11 @@ INDEX_HTML = """<!doctype html>
 
     form.author.addEventListener("input", updateSeriesOptions);
     form.author.addEventListener("change", updateSeriesOptions);
+
+    themeToggle.addEventListener("click", () => {
+      applyTheme(currentTheme() === "dark" ? "light" : "dark");
+      render();
+    });
 
     document.querySelectorAll("[data-tab]").forEach((button) => {
       button.addEventListener("click", () => {
