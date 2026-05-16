@@ -318,10 +318,43 @@ INDEX_HTML = """<!doctype html>
     }
 
     .series-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
       color: #475569;
       font-size: 14px;
       font-weight: 750;
       margin-top: 2px;
+    }
+
+    .series-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-weight: 650;
+    }
+
+    .series-count-input {
+      width: 74px;
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 4px 7px;
+      font: inherit;
+      font-size: 13px;
+      background: #fff;
+    }
+
+    .complete-badge {
+      padding: 4px 7px;
+      border-radius: 7px;
+      background: #e4f3eb;
+      color: var(--ok);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
     }
 
     .book-actions button {
@@ -488,7 +521,7 @@ INDEX_HTML = """<!doctype html>
   <div class="toast" id="toast"></div>
 
   <script>
-    const state = { owned: [], wishlist: [] };
+    const state = { owned: [], wishlist: [], series_counts: {} };
     const labels = { owned: "библиотеку", wishlist: "желаемое" };
     const form = document.getElementById("bookForm");
     const toast = document.getElementById("toast");
@@ -634,6 +667,44 @@ INDEX_HTML = """<!doctype html>
         `).join("");
     }
 
+    function seriesKey(author, series) {
+      return `${author || ""}\u001f${series || ""}`;
+    }
+
+    function seriesTotal(author, series) {
+      return [...state.owned, ...state.wishlist].filter((book) =>
+        (book.author || "Автор не указан") === author &&
+        (book.series || "Без цикла") === series
+      ).length;
+    }
+
+    function renderSeriesHeading(author, series, visibleCount) {
+      if (series === "Без цикла") {
+        return `<div class="series-heading"><span>${escapeText(series)} · ${pluralBooks(visibleCount)}</span></div>`;
+      }
+
+      const key = seriesKey(author, series);
+      const expected = Number(state.series_counts[key] || 0);
+      const total = seriesTotal(author, series);
+      const done = expected > 0 && expected === total
+        ? `<span class="complete-badge">Цикл завершен</span>`
+        : "";
+
+      return `
+        <div class="series-heading">
+          <span>${escapeText(series)} · ${pluralBooks(visibleCount)}</span>
+          <span class="series-meta">
+            <span>Книг в цикле</span>
+            <input class="series-count-input" type="number" min="0" step="1"
+              value="${expected || ""}"
+              data-author="${escapeText(author)}"
+              data-series="${escapeText(series)}">
+            ${done}
+          </span>
+        </div>
+      `;
+    }
+
     function renderAuthorSeriesTree(target, visible) {
       const authorGroups = new Map();
       visible.forEach((item) => {
@@ -653,7 +724,7 @@ INDEX_HTML = """<!doctype html>
             .sort(([seriesA], [seriesB]) => seriesA.localeCompare(seriesB, "ru", { numeric: true }))
             .map(([series, items]) => `
               <section class="series-group">
-                <div class="series-heading">${escapeText(series)} · ${pluralBooks(items.length)}</div>
+                ${renderSeriesHeading(author, series, items.length)}
                 ${items.map(({ book, index }) => renderBook(target, book, index)).join("")}
               </section>
             `).join("");
@@ -710,7 +781,17 @@ INDEX_HTML = """<!doctype html>
       const data = await requestJson("/api/books");
       state.owned = data.owned || [];
       state.wishlist = data.wishlist || [];
+      state.series_counts = data.series_counts || {};
       render();
+    }
+
+    async function saveSeriesCount(author, series, count) {
+      await requestJson("/api/series-count", {
+        method: "POST",
+        body: JSON.stringify({ author, series, count })
+      });
+      await loadBooks();
+      showToast("Количество книг в цикле сохранено");
     }
 
     async function addBook(target) {
@@ -899,14 +980,24 @@ INDEX_HTML = """<!doctype html>
 
     document.querySelector(".lists").addEventListener("change", (event) => {
       const select = event.target.closest("select[data-action='rating']");
-      if (!select) return;
+      if (select) {
+        rateBook(
+          select.dataset.target,
+          Number(select.dataset.index),
+          select.dataset.ratingField,
+          select.value
+        ).catch((error) => showToast(error.message));
+        return;
+      }
 
-      rateBook(
-        select.dataset.target,
-        Number(select.dataset.index),
-        select.dataset.ratingField,
-        select.value
-      ).catch((error) => showToast(error.message));
+      const countInput = event.target.closest("input.series-count-input");
+      if (countInput) {
+        saveSeriesCount(
+          countInput.dataset.author,
+          countInput.dataset.series,
+          countInput.value
+        ).catch((error) => showToast(error.message));
+      }
     });
 
     loadBooks().catch((error) => {
@@ -920,7 +1011,7 @@ INDEX_HTML = """<!doctype html>
 
 
 def default_data():
-    return {"owned": [], "wishlist": []}
+    return {"owned": [], "wishlist": [], "series_counts": {}}
 
 
 def normalize_book(item):
@@ -952,6 +1043,28 @@ def normalize_rating(value):
     return ""
 
 
+def normalize_series_counts(value):
+    if not isinstance(value, dict):
+        return {}
+
+    result = {}
+    for key, raw_count in value.items():
+        text_key = str(key).strip()
+        if not text_key:
+            continue
+        try:
+            count = int(raw_count)
+        except (TypeError, ValueError):
+            continue
+        if count > 0:
+            result[text_key] = count
+    return result
+
+
+def series_key(author, series):
+    return f"{author or ''}\u001f{series or ''}"
+
+
 def load_data():
     migrate_legacy_data_file()
     if not DATA_FILE.exists():
@@ -969,6 +1082,7 @@ def load_data():
                 book for book in (normalize_book(item) for item in raw[key])
                 if book and book["title"]
             ]
+    data["series_counts"] = normalize_series_counts(raw.get("series_counts", {}))
     return data
 
 
@@ -1055,6 +1169,9 @@ class LibraryHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/rating":
             self.rate_book(body)
+            return
+        if path == "/api/series-count":
+            self.set_series_count(body)
             return
         self.send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
 
@@ -1215,6 +1332,29 @@ class LibraryHandler(BaseHTTPRequestHandler):
             return
 
         data[target][index][field] = normalize_rating(body.get("rating", ""))
+        save_data(data)
+        self.send_json(data)
+
+    def set_series_count(self, body):
+        author = str(body.get("author", "")).strip()
+        series = str(body.get("series", "")).strip()
+        if not series or series == "Без цикла":
+            self.send_json({"error": "Series is required"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        try:
+            count = int(str(body.get("count", "") or "0"))
+        except ValueError:
+            count = 0
+
+        data = load_data()
+        key = series_key(author, series)
+        data.setdefault("series_counts", {})
+        if count > 0:
+            data["series_counts"][key] = count
+        else:
+            data["series_counts"].pop(key, None)
+
         save_data(data)
         self.send_json(data)
 
