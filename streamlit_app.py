@@ -6,8 +6,11 @@ from urllib.parse import urlencode
 
 import streamlit as st
 
+from github_backup import safe_backup_if_due
 
-DATA_FILE = Path(os.environ.get("DATA_FILE", Path(__file__).with_name("library_data.json")))
+DATA_DIR = Path(__file__).with_name("data")
+DATA_FILE = Path(os.environ.get("DATA_FILE", DATA_DIR / "library_data.json"))
+LEGACY_DATA_FILE = Path(__file__).with_name("library_data.json")
 VALID_LISTS = {"owned", "wishlist"}
 
 
@@ -26,6 +29,7 @@ def normalize_book(item):
 
 
 def load_data():
+    migrate_legacy_data_file()
     if not DATA_FILE.exists():
         return empty_data()
 
@@ -46,10 +50,19 @@ def load_data():
 
 
 def save_data(data):
+    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
     DATA_FILE.write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    safe_backup_if_due(DATA_FILE, force=True)
+
+
+def migrate_legacy_data_file():
+    if DATA_FILE.exists() or not LEGACY_DATA_FILE.exists():
+        return
+    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DATA_FILE.write_text(LEGACY_DATA_FILE.read_text(encoding="utf-8"), encoding="utf-8")
 
 
 def all_books(data):
@@ -444,6 +457,7 @@ def main():
     st.title("Домашняя библиотека")
 
     data = load_data()
+    safe_backup_if_due(DATA_FILE)
     handle_action_params(data)
     st.caption(f"В библиотеке: {len(data['owned'])} | В желаемом: {len(data['wishlist'])}")
 
