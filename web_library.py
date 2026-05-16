@@ -273,6 +273,17 @@ INDEX_HTML = """<!doctype html>
       gap: 8px;
       margin-top: 10px;
       flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .rating-select {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 6px 8px;
+      font: inherit;
+      font-size: 14px;
+      background: #fff;
     }
 
     .book-group {
@@ -564,6 +575,9 @@ INDEX_HTML = """<!doctype html>
             ${series}
             ${book.note ? `<div class="note">${escapeText(book.note)}</div>` : ""}
             <div class="book-actions">
+              <select class="rating-select" data-action="rating" data-target="${target}" data-index="${index}" title="Оценка">
+                ${ratingOptions(book.rating)}
+              </select>
               ${moveButton}
               <button type="button" data-action="order-up" data-target="${target}" data-index="${index}">Вверх</button>
               <button type="button" data-action="order-down" data-target="${target}" data-index="${index}">Вниз</button>
@@ -703,6 +717,34 @@ INDEX_HTML = """<!doctype html>
       };
     }
 
+    function ratingOptions(current) {
+      const normalized = normalizeRating(current);
+      const values = ["", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+      return values.map((value) => {
+        const label = value ? value : "Оценка";
+        const selected = value === normalized ? "selected" : "";
+        return `<option value="${value}" ${selected}>${label}</option>`;
+      }).join("");
+    }
+
+    function normalizeRating(value) {
+      const text = String(value || "").trim();
+      const number = Number(text);
+      if (Number.isInteger(number) && number >= 1 && number <= 10) {
+        return String(number);
+      }
+      return "";
+    }
+
+    async function rateBook(target, index, rating) {
+      await requestJson("/api/rating", {
+        method: "POST",
+        body: JSON.stringify({ target, index, rating })
+      });
+      await loadBooks();
+      showToast("Оценка сохранена");
+    }
+
     function setEditMode(target, index) {
       const book = state[target][index];
       if (!book) return;
@@ -827,6 +869,17 @@ INDEX_HTML = """<!doctype html>
       }
     });
 
+    document.querySelector(".lists").addEventListener("change", (event) => {
+      const select = event.target.closest("select[data-action='rating']");
+      if (!select) return;
+
+      rateBook(
+        select.dataset.target,
+        Number(select.dataset.index),
+        select.value
+      ).catch((error) => showToast(error.message));
+    });
+
     loadBooks().catch((error) => {
       document.getElementById("status").textContent = "Ошибка загрузки";
       showToast(error.message);
@@ -850,7 +903,21 @@ def normalize_book(item):
         "year": str(item.get("year", "")).strip(),
         "series": str(item.get("series", "")).strip(),
         "note": str(item.get("note", "")).strip(),
+        "rating": normalize_rating(item.get("rating", "")),
     }
+
+
+def normalize_rating(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        rating = int(text)
+    except ValueError:
+        return ""
+    if 1 <= rating <= 10:
+        return str(rating)
+    return ""
 
 
 def load_data():
@@ -953,6 +1020,9 @@ class LibraryHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/reorder":
             self.reorder_book(body)
+            return
+        if path == "/api/rating":
+            self.rate_book(body)
             return
         self.send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
 
@@ -1088,6 +1158,26 @@ class LibraryHandler(BaseHTTPRequestHandler):
 
         other_index = same_group_indexes[new_position]
         books[index], books[other_index] = books[other_index], books[index]
+        save_data(data)
+        self.send_json(data)
+
+    def rate_book(self, body):
+        target = body.get("target")
+        try:
+            index = int(body.get("index", -1))
+        except (TypeError, ValueError):
+            index = -1
+
+        if target not in VALID_LISTS:
+            self.send_json({"error": "Unknown list"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
+        data = load_data()
+        if index < 0 or index >= len(data[target]):
+            self.send_json({"error": "Book not found"}, status=HTTPStatus.NOT_FOUND)
+            return
+
+        data[target][index]["rating"] = normalize_rating(body.get("rating", ""))
         save_data(data)
         self.send_json(data)
 

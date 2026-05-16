@@ -25,6 +25,7 @@ def normalize_book(item):
         "year": str(item.get("year", "")).strip(),
         "series": str(item.get("series", "")).strip(),
         "note": str(item.get("note", "")).strip(),
+        "rating": normalize_rating(item.get("rating", "")),
     }
 
 
@@ -96,6 +97,19 @@ def matches_query(book, query):
 
 def normalize_search(value):
     return str(value).lower().replace("ё", "е").strip()
+
+
+def normalize_rating(value):
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        rating = int(text)
+    except ValueError:
+        return ""
+    if 1 <= rating <= 10:
+        return str(rating)
+    return ""
 
 
 def move_between_lists(data, index):
@@ -310,6 +324,7 @@ def book_form(data):
                     "year": year,
                     "series": series,
                     "note": note,
+                    "rating": "",
                 }
             )
         )
@@ -328,6 +343,12 @@ def edit_book_form(data, target, index):
             series = cols[1].text_input("Цикл", value=book["series"], key=f"series_{target}_{index}")
             year = cols[2].text_input("Год", value=book["year"], key=f"year_{target}_{index}")
             note = st.text_input("Заметка", value=book["note"], key=f"note_{target}_{index}")
+            rating = st.selectbox(
+                "Оценка",
+                [""] + [str(value) for value in range(1, 11)],
+                index=([""] + [str(value) for value in range(1, 11)]).index(book.get("rating", "")),
+                key=f"rating_{target}_{index}",
+            )
             submitted = st.form_submit_button("Сохранить")
         if submitted:
             if not title.strip():
@@ -340,6 +361,7 @@ def edit_book_form(data, target, index):
                     "series": series,
                     "year": year,
                     "note": note,
+                    "rating": rating,
                 }
             )
             save_data(data)
@@ -423,6 +445,22 @@ def render_book(data, target, index, book):
 
     if st.session_state.get("edit") == (target, index):
         edit_book_form(data, target, index)
+        return
+
+    rating_options = [""] + [str(value) for value in range(1, 11)]
+    current_rating = normalize_rating(book.get("rating", ""))
+    selected_rating = st.selectbox(
+        "Оценка",
+        rating_options,
+        index=rating_options.index(current_rating),
+        key=f"rating_select_{target}_{index}_{current_rating}",
+        label_visibility="collapsed",
+        placeholder="Оценка",
+    )
+    if selected_rating != current_rating:
+        data[target][index]["rating"] = selected_rating
+        save_data(data)
+        rerun()
 
 
 def render_list(data, target, title):
