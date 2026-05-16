@@ -38,3 +38,31 @@
 ```powershell
 py web_library.py
 ```
+
+## Размещение на хостинге
+
+Приложение готово к запуску на Python-хостингах без внешних зависимостей.
+
+### Render
+
+1. Загрузите проект в GitHub.
+2. Создайте на Render новый `Web Service`.
+3. Выберите репозиторий с проектом.
+4. Укажите:
+   - Runtime: `Python 3`
+   - Build command: `pip install -r requirements.txt`
+   - Start command: `python web_library.py`
+5. После деплоя откройте выданный Render URL.
+
+### Railway
+
+1. Загрузите проект в GitHub.
+2. Создайте Railway project из репозитория.
+3. Railway сам использует переменную `PORT`.
+4. Start command: `python web_library.py`.
+
+### Важно про данные
+
+Книги хранятся в `library_data.json`. На некоторых бесплатных хостингах файловая система может сбрасываться при redeploy или перезапуске. Для постоянного хранения нужен persistent disk/volume или перенос данных в базу данных.
+
+Сейчас приложение поддерживает переменную окружения `DATA_FILE`, если хостинг дает отдельный постоянный путь для файлов.

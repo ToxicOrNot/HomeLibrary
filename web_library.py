@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import os
 import socket
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -7,9 +8,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 
-DATA_FILE = Path(__file__).with_name("library_data.json")
+DATA_FILE = Path(os.environ.get("DATA_FILE", Path(__file__).with_name("library_data.json")))
 HOST = "0.0.0.0"
-PORT = 8000
+PORT = int(os.environ.get("PORT", "8000"))
 
 
 EMPTY_DATA = {"owned": [], "wishlist": []}
