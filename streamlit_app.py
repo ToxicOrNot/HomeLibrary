@@ -75,10 +75,12 @@ def sorted_groups(items):
 def matches_query(book, query):
     if not query:
         return True
-    haystack = " ".join(
-        [book["title"], book["author"], book["year"], book["series"], book["note"]]
-    ).lower()
-    return query.lower() in haystack
+    searchable_text = " ".join([book["title"], book["author"], book["series"]])
+    return normalize_search(query) in normalize_search(searchable_text)
+
+
+def normalize_search(value):
+    return str(value).lower().replace("ё", "е").strip()
 
 
 def move_between_lists(data, index):
@@ -409,13 +411,12 @@ def render_book(data, target, index, book):
 
 
 def render_list(data, target, title):
-    top_cols = st.columns([1, 1.1, 0.8])
+    top_cols = st.columns([1, 1.8])
     top_cols[0].subheader(f"{title}: {len(data[target])}")
-    query = top_cols[1].text_input("Поиск", key=f"search_{target}", label_visibility="collapsed")
-    view = top_cols[2].selectbox(
-        "Вид",
-        ["Автор → цикл", "Обычный список", "По авторам", "По циклам"],
-        key=f"view_{target}",
+    query = top_cols[1].text_input(
+        "Поиск",
+        key=f"search_{target}",
+        placeholder="Книга, автор или цикл",
         label_visibility="collapsed",
     )
 
@@ -426,42 +427,6 @@ def render_list(data, target, title):
     ]
     if not visible:
         st.info("Ничего не найдено.")
-        return
-
-    if view == "Обычный список":
-        visible = sorted(
-            visible,
-            key=lambda item: (
-                item[1]["author"].lower(),
-                item[1]["series"].lower(),
-                item[1]["title"].lower(),
-            ),
-        )
-        for index, book in visible:
-            render_book(data, target, index, book)
-            st.divider()
-        return
-
-    if view == "По авторам":
-        groups = {}
-        for index, book in visible:
-            groups.setdefault(book["author"] or "Автор не указан", []).append((index, book))
-        for author in sorted(groups, key=str.lower):
-            with st.expander(f"{author} · {len(groups[author])}", expanded=True):
-                for index, book in groups[author]:
-                    render_book(data, target, index, book)
-                    st.divider()
-        return
-
-    if view == "По циклам":
-        groups = {}
-        for index, book in visible:
-            groups.setdefault(book["series"] or "Без цикла", []).append((index, book))
-        for series in sorted(groups, key=str.lower):
-            with st.expander(f"{series} · {len(groups[series])}", expanded=True):
-                for index, book in groups[series]:
-                    render_book(data, target, index, book)
-                    st.divider()
         return
 
     for author, series_groups in sorted_groups(visible):

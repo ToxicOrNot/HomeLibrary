@@ -232,10 +232,6 @@ INDEX_HTML = """<!doctype html>
       margin: 0;
     }
 
-    .view-mode {
-      min-width: 150px;
-    }
-
     .items {
       display: grid;
       gap: 10px;
@@ -441,13 +437,7 @@ INDEX_HTML = """<!doctype html>
           <span class="count" id="ownedCount">0 книг</span>
         </div>
         <div class="list-tools">
-          <input class="search" id="ownedSearch" placeholder="Поиск в библиотеке">
-          <select class="view-mode" id="ownedViewMode" aria-label="Группировка библиотеки">
-            <option value="tree" selected>Автор → цикл</option>
-            <option value="list">Обычный</option>
-            <option value="author">По авторам</option>
-            <option value="series">По циклам</option>
-          </select>
+          <input class="search" id="ownedSearch" placeholder="Книга, автор или цикл">
         </div>
         <div class="items" id="ownedList"></div>
       </article>
@@ -458,13 +448,7 @@ INDEX_HTML = """<!doctype html>
           <span class="count" id="wishlistCount">0 книг</span>
         </div>
         <div class="list-tools">
-          <input class="search" id="wishlistSearch" placeholder="Поиск в желаемом">
-          <select class="view-mode" id="wishlistViewMode" aria-label="Группировка желаемого">
-            <option value="tree" selected>Автор → цикл</option>
-            <option value="list">Обычный</option>
-            <option value="author">По авторам</option>
-            <option value="series">По циклам</option>
-          </select>
+          <input class="search" id="wishlistSearch" placeholder="Книга, автор или цикл">
         </div>
         <div class="items" id="wishlistList"></div>
       </article>
@@ -501,8 +485,12 @@ INDEX_HTML = """<!doctype html>
 
     function bookMatches(book, query) {
       if (!query) return true;
-      const text = `${book.title} ${book.author} ${book.year} ${book.series} ${book.note}`.toLowerCase();
-      return text.includes(query.toLowerCase());
+      const text = `${book.title} ${book.author} ${book.series}`;
+      return normalizeSearch(text).includes(normalizeSearch(query));
+    }
+
+    function normalizeSearch(value) {
+      return String(value || "").toLowerCase().replaceAll("ё", "е").trim();
     }
 
     function escapeText(value) {
@@ -637,7 +625,6 @@ INDEX_HTML = """<!doctype html>
     function renderList(target) {
       const list = document.getElementById(`${target}List`);
       const query = document.getElementById(`${target}Search`).value.trim();
-      const viewMode = document.getElementById(`${target}ViewMode`).value;
       const books = state[target];
       const visible = books
         .map((book, index) => ({ book, index }))
@@ -651,19 +638,7 @@ INDEX_HTML = """<!doctype html>
         return;
       }
 
-      if (viewMode === "tree") {
-        list.innerHTML = renderAuthorSeriesTree(target, visible);
-        return;
-      }
-      if (viewMode === "author") {
-        list.innerHTML = renderGrouped(target, sorted, "author", "Автор не указан");
-        return;
-      }
-      if (viewMode === "series") {
-        list.innerHTML = renderGrouped(target, sorted, "series", "Без цикла");
-        return;
-      }
-      list.innerHTML = sorted.map(({ book, index }) => renderBook(target, book, index)).join("");
+      list.innerHTML = renderAuthorSeriesTree(target, visible);
     }
 
     function render() {
@@ -817,10 +792,6 @@ INDEX_HTML = """<!doctype html>
 
     form.author.addEventListener("input", updateSeriesOptions);
     form.author.addEventListener("change", updateSeriesOptions);
-
-    document.querySelectorAll(".view-mode").forEach((input) => {
-      input.addEventListener("change", render);
-    });
 
     document.querySelectorAll("[data-tab]").forEach((button) => {
       button.addEventListener("click", () => {
