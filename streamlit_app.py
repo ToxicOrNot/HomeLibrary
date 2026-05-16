@@ -141,19 +141,14 @@ def apply_compact_style():
     st.markdown(
         """
         <style>
-          [data-testid="stAppViewContainer"] {
-            background: #f5f3ef;
-          }
-
           .block-container {
-            padding-top: 1rem;
+            padding-top: 1.2rem;
             padding-bottom: 1.4rem;
             max-width: 1180px;
           }
 
           h1 {
-            color: #1f2933;
-            font-size: 1.9rem !important;
+            font-size: 1.75rem !important;
             margin-bottom: 0.1rem !important;
           }
 
@@ -177,7 +172,7 @@ def apply_compact_style():
           }
 
           div[data-testid="stVerticalBlock"] {
-            gap: 0.28rem;
+            gap: 0.35rem;
           }
 
           div[data-testid="stHorizontalBlock"] {
@@ -194,7 +189,6 @@ def apply_compact_style():
           div[data-testid="stTextInput"] input,
           div[data-testid="stSelectbox"] div[data-baseweb="select"] {
             min-height: 2.25rem;
-            border-radius: 7px;
           }
 
           div[data-testid="stTextInput"] label,
@@ -203,56 +197,12 @@ def apply_compact_style():
             font-size: 0.82rem;
           }
 
-          div[data-testid="stForm"],
-          div[data-testid="stTabs"] [data-testid="stVerticalBlockBorderWrapper"] {
-            background: #ffffff;
-            border: 1px solid #d8dee7;
-            border-radius: 8px;
-            box-shadow: 0 10px 28px rgba(31, 41, 51, 0.06);
-          }
-
-          button[data-baseweb="tab"] {
-            font-weight: 700;
-          }
-
-          .list-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.75rem;
-            padding: 0.2rem 0 0.35rem;
-            color: #1f2933;
-          }
-
-          .author-heading {
-            margin: 0.65rem 0 0.35rem;
-            padding: 0.45rem 0.6rem;
-            border-radius: 7px;
-            background: #eef2f7;
-            color: #334155;
-            font-size: 0.92rem;
-            font-weight: 800;
-          }
-
-          .series-block {
-            margin-left: 0.65rem;
-            padding-left: 0.7rem;
-            border-left: 2px solid #d8dee7;
-          }
-
-          .series-heading {
-            color: #475569;
-            font-size: 0.88rem;
-            font-weight: 800;
-            margin: 0.35rem 0 0.2rem;
-          }
-
           .book-card {
             border: 1px solid #d8dee7;
             border-radius: 8px;
             padding: 0.55rem 0.65rem;
             background: #ffffff;
-            margin: 0.2rem 0;
+            margin: 0.25rem 0;
           }
 
           .book-title {
@@ -279,7 +229,7 @@ def apply_compact_style():
             flex-wrap: nowrap;
             gap: 0.35rem;
             align-items: center;
-            margin: -0.05rem 0 0.15rem;
+            margin: -0.05rem 0 0.35rem;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
           }
@@ -314,23 +264,7 @@ def apply_compact_style():
           }
 
           hr {
-            margin: 0.15rem 0 0.35rem !important;
-          }
-
-          @media (max-width: 760px) {
-            .block-container {
-              padding-left: 0.75rem;
-              padding-right: 0.75rem;
-            }
-
-            h1 {
-              font-size: 1.55rem !important;
-            }
-
-            .series-block {
-              margin-left: 0.35rem;
-              padding-left: 0.55rem;
-            }
+            margin: 0.25rem 0 0.45rem !important;
           }
         </style>
         """,
@@ -342,8 +276,7 @@ def book_form(data):
     books = all_books(data)
     authors = unique_sorted(book["author"] for book in books)
 
-    st.markdown("### Новая книга")
-    with st.container():
+    with st.expander("Добавить книгу", expanded=False):
         with st.form("add_book", clear_on_submit=True):
             title = st.text_input("Название")
 
@@ -532,7 +465,7 @@ def render_book(data, target, index, book):
 
 def render_list(data, target, title):
     top_cols = st.columns([1, 1.8])
-    top_cols[0].markdown(f"### {title}: {len(data[target])}")
+    top_cols[0].subheader(f"{title}: {len(data[target])}")
     query = top_cols[1].text_input(
         "Поиск",
         key=f"search_{target}",
@@ -550,19 +483,12 @@ def render_list(data, target, title):
         return
 
     for author, series_groups in sorted_groups(visible):
-        total = sum(len(items) for items in series_groups.values())
-        st.markdown(
-            f'<div class="author-heading">{html.escape(author)} · {total}</div>',
-            unsafe_allow_html=True,
-        )
-        for series, items in sorted(series_groups.items(), key=lambda item: item[0].lower()):
-            st.markdown(
-                f'<div class="series-block"><div class="series-heading">{html.escape(series)} · {len(items)}</div></div>',
-                unsafe_allow_html=True,
-            )
-            for index, book in items:
-                render_book(data, target, index, book)
-                st.divider()
+        with st.expander(f"{author}", expanded=True):
+            for series, items in sorted(series_groups.items(), key=lambda item: item[0].lower()):
+                st.markdown(f"##### {series}")
+                for index, book in items:
+                    render_book(data, target, index, book)
+                    st.divider()
 
 
 def main():
