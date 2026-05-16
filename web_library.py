@@ -1,17 +1,23 @@
 # -*- coding: utf-8 -*-
 import json
+import mimetypes
 import os
+import re
 import socket
+from html import unescape
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qs, quote_plus, unquote, urlparse
+from urllib.request import Request, urlopen
 
 from github_backup import safe_backup_if_due
 
 DATA_DIR = Path(__file__).with_name("data")
 DATA_FILE = Path(os.environ.get("DATA_FILE", DATA_DIR / "library_data.json"))
 LEGACY_DATA_FILE = Path(__file__).with_name("library_data.json")
+ICONS_DIR = Path(__file__).with_name("icons")
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("PORT", "8000"))
 
@@ -363,12 +369,58 @@ INDEX_HTML = """<!doctype html>
       font-size: 14px;
     }
 
+    .book-info {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #f8fafc;
+      color: #475569;
+      font-size: 14px;
+    }
+
+    .info-title {
+      margin-bottom: 6px;
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .info-row {
+      margin-top: 5px;
+      overflow-wrap: anywhere;
+    }
+
+    .info-link {
+      display: inline-block;
+      margin-top: 8px;
+      color: var(--primary);
+      font-weight: 750;
+      text-decoration: none;
+    }
+
     .icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       width: 36px;
       min-width: 36px;
       padding: 7px 0;
       font-size: 17px;
       line-height: 1;
+    }
+
+    .icon-button img,
+    .scroll-top img {
+      width: 20px;
+      height: 20px;
+      display: block;
+      flex: 0 0 auto;
+      object-fit: contain;
+    }
+
+    .scroll-top img {
+      width: 24px;
+      height: 24px;
     }
 
     .empty {
@@ -396,6 +448,32 @@ INDEX_HTML = """<!doctype html>
 
     .toast.show {
       opacity: 1;
+    }
+
+    .scroll-top {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 20;
+      width: 42px;
+      min-width: 42px;
+      height: 42px;
+      padding: 0;
+      border-radius: 7px;
+      box-shadow: var(--shadow);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+
+    .scroll-top.show {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
     }
 
     @media (max-width: 760px) {
@@ -443,6 +521,11 @@ INDEX_HTML = """<!doctype html>
 
       .list-panel.active {
         display: block;
+      }
+
+      .scroll-top {
+        right: 14px;
+        bottom: 14px;
       }
     }
   </style>
@@ -519,12 +602,16 @@ INDEX_HTML = """<!doctype html>
   </main>
 
   <div class="toast" id="toast"></div>
+  <button class="primary scroll-top" type="button" id="scrollTop" title="Наверх" aria-label="Наверх">
+    <img src="/icons/Arrow%20Big%20Up%20Lines.png?v={{ICON_VERSION}}" alt="">
+  </button>
 
   <script>
     const state = { owned: [], wishlist: [], series_counts: {} };
     const labels = { owned: "библиотеку", wishlist: "желаемое" };
     const form = document.getElementById("bookForm");
     const toast = document.getElementById("toast");
+    const scrollTopButton = document.getElementById("scrollTop");
     let editing = null;
 
     function allBooks() {
@@ -640,11 +727,13 @@ INDEX_HTML = """<!doctype html>
             <div class="book-actions">
               ${ratingControls}
               ${moveButton}
-              <button class="icon-button" type="button" data-action="order-up" data-target="${target}" data-index="${index}" title="Вверх" aria-label="Вверх">↑</button>
-              <button class="icon-button" type="button" data-action="order-down" data-target="${target}" data-index="${index}" title="Вниз" aria-label="Вниз">↓</button>
-              <button class="icon-button" type="button" data-action="edit" data-target="${target}" data-index="${index}" title="Редактировать" aria-label="Редактировать">✎</button>
-              <button class="icon-button danger" type="button" data-action="delete" data-target="${target}" data-index="${index}" title="Удалить" aria-label="Удалить">🗑</button>
+              <button class="icon-button" type="button" data-action="info" data-target="${target}" data-index="${index}" title="LiveLib" aria-label="LiveLib"><img src="/icons/Info%20Square%20Rounded.png?v={{ICON_VERSION}}" alt=""></button>
+              <button class="icon-button" type="button" data-action="order-up" data-target="${target}" data-index="${index}" title="Вверх" aria-label="Вверх"><img src="/icons/Arrow%20Big%20Up.png?v={{ICON_VERSION}}" alt=""></button>
+              <button class="icon-button" type="button" data-action="order-down" data-target="${target}" data-index="${index}" title="Вниз" aria-label="Вниз"><img src="/icons/Arrow%20Big%20Down.png?v={{ICON_VERSION}}" alt=""></button>
+              <button class="icon-button" type="button" data-action="edit" data-target="${target}" data-index="${index}" title="Редактировать" aria-label="Редактировать"><img src="/icons/Edit.png?v={{ICON_VERSION}}" alt=""></button>
+              <button class="icon-button danger" type="button" data-action="delete" data-target="${target}" data-index="${index}" title="Удалить" aria-label="Удалить"><img src="/icons/Trash.png?v={{ICON_VERSION}}" alt=""></button>
             </div>
+            <div class="book-info" id="info-${target}-${index}" hidden></div>
           </div>
         `;
     }
@@ -927,6 +1016,53 @@ INDEX_HTML = """<!doctype html>
       showToast("Порядок обновлен");
     }
 
+    async function showLiveLibInfo(target, index) {
+      const panel = document.getElementById(`info-${target}-${index}`);
+      const book = state[target]?.[index];
+      if (!panel || !book) return;
+
+      if (!panel.hidden && panel.dataset.loaded === "true") {
+        panel.hidden = true;
+        return;
+      }
+
+      panel.hidden = false;
+      panel.innerHTML = `<div class="meta">Ищу информацию на LiveLib и Goodreads...</div>`;
+
+      const params = new URLSearchParams({
+        title: book.title || "",
+        author: book.author || ""
+      });
+      const data = await requestJson(`/api/livelib?${params.toString()}`);
+      panel.dataset.loaded = "true";
+
+      const rows = [];
+      if (data.source) {
+        rows.push(`<div class="info-row"><strong>Источник:</strong> ${escapeText(data.source)}</div>`);
+      }
+      if (data.author) {
+        rows.push(`<div class="info-row"><strong>Автор:</strong> ${escapeText(data.author)}</div>`);
+      }
+      if (data.rating) {
+        rows.push(`<div class="info-row"><strong>Рейтинг ${escapeText(data.source || "")}:</strong> ${escapeText(data.rating)}</div>`);
+      }
+      if (data.description) {
+        rows.push(`<div class="info-row">${escapeText(data.description)}</div>`);
+      }
+      if (!rows.length) {
+        rows.push(`<div class="info-row">Автоматически получить описание не удалось. Можно открыть поиск LiveLib вручную.</div>`);
+      }
+
+      const link = data.url
+        ? `<a class="info-link" href="${escapeText(data.url)}" target="_blank" rel="noopener">Открыть на ${escapeText(data.source || "сайте")}</a>`
+        : "";
+      panel.innerHTML = `
+        <div class="info-title">${escapeText(data.title || book.title)}</div>
+        ${rows.join("")}
+        ${link}
+      `;
+    }
+
     form.addEventListener("submit", (event) => {
       event.preventDefault();
       const action = event.submitter?.dataset.action || "add";
@@ -956,6 +1092,17 @@ INDEX_HTML = """<!doctype html>
       });
     });
 
+    function updateScrollTopButton() {
+      scrollTopButton.classList.toggle("show", window.scrollY > 360);
+    }
+
+    scrollTopButton.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+
+    window.addEventListener("scroll", updateScrollTopButton, { passive: true });
+    updateScrollTopButton();
+
     document.querySelector(".lists").addEventListener("click", (event) => {
       const button = event.target.closest("button[data-action]");
       if (!button) return;
@@ -975,6 +1122,9 @@ INDEX_HTML = """<!doctype html>
       }
       if (button.dataset.action === "move") {
         moveBook(index).catch((error) => showToast(error.message));
+      }
+      if (button.dataset.action === "info") {
+        showLiveLibInfo(button.dataset.target, index).catch((error) => showToast(error.message));
       }
     });
 
@@ -1111,6 +1261,285 @@ def get_lan_ip():
         return "127.0.0.1"
 
 
+def fetch_book_info(title, author=""):
+    livelib_info = fetch_livelib_info(title, author)
+    if is_livelib_book_result(livelib_info):
+        return livelib_info
+
+    goodreads_info = fetch_goodreads_info(title, author)
+    if is_goodreads_book_result(goodreads_info):
+        return goodreads_info
+
+    return goodreads_info or livelib_info
+
+
+def fetch_livelib_info(title, author=""):
+    title = str(title or "").strip()
+    author = str(author or "").strip()
+    query = " ".join(part for part in (title, author) if part).strip()
+    search_url = f"https://www.livelib.ru/find/books/{quote_plus(query)}"
+    result = {
+        "title": title,
+        "author": author,
+        "url": search_url,
+        "source": "LiveLib",
+    }
+
+    if not title:
+        result["description"] = "Название книги не указано."
+        return result
+
+    try:
+        html = fetch_url(search_url)
+        book_url = first_livelib_book_url(html) or search_url
+        if book_url != search_url:
+            html = fetch_url(book_url)
+        parsed = parse_livelib_book_page(html)
+        parsed["url"] = parsed.get("url") or book_url
+        return {**result, **parsed}
+    except (OSError, HTTPError, URLError, TimeoutError, ValueError):
+        result["description"] = (
+            "Не удалось автоматически загрузить данные LiveLib. "
+            "Откройте поиск вручную."
+        )
+        return result
+
+
+def is_livelib_book_result(info):
+    return info.get("source") == "LiveLib" and "/book/" in info.get("url", "")
+
+
+def fetch_goodreads_info(title, author=""):
+    title = str(title or "").strip()
+    author = str(author or "").strip()
+    query = " ".join(part for part in (title, author) if part).strip()
+    search_url = f"https://www.goodreads.com/search?q={quote_plus(query)}"
+    title_url = f"https://www.goodreads.com/book/title?id={quote_plus(title)}"
+    result = {
+        "title": title,
+        "author": author,
+        "url": title_url if title else search_url,
+        "source": "Goodreads",
+    }
+
+    if not title:
+        result["description"] = "Название книги не указано."
+        return result
+
+    try:
+        html = fetch_url(title_url)
+        parsed = parse_livelib_book_page(html)
+        if parsed.get("title") or parsed.get("rating") or parsed.get("description"):
+            parsed["url"] = parsed.get("url") or title_url
+            parsed["source"] = "Goodreads"
+            return {**result, **parsed}
+
+        html = fetch_url(search_url)
+        book_url = first_goodreads_book_url(html) or search_url
+        if book_url != search_url:
+            html = fetch_url(book_url)
+        parsed = parse_livelib_book_page(html)
+        parsed["url"] = parsed.get("url") or book_url
+        parsed["source"] = "Goodreads"
+        return {**result, **parsed}
+    except (OSError, HTTPError, URLError, TimeoutError, ValueError):
+        result["description"] = (
+            "Не удалось автоматически загрузить данные Goodreads. "
+            "Откройте поиск вручную."
+        )
+        return result
+
+
+def is_goodreads_book_result(info):
+    url = info.get("url", "")
+    has_data = bool(info.get("title") or info.get("rating") or info.get("description"))
+    return has_data and info.get("source") == "Goodreads" and (
+        "/book/show/" in url or "/book/title" in url
+    )
+
+
+def fetch_url(url):
+    request = Request(
+        url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+    )
+    with urlopen(request, timeout=10) as response:
+        charset = response.headers.get_content_charset() or "utf-8"
+        return response.read().decode(charset, errors="replace")
+
+
+def first_livelib_book_url(html):
+    match = re.search(r'href=["\']([^"\']*/book/[^"\']+)["\']', html, re.IGNORECASE)
+    if not match:
+        return ""
+    return absolute_livelib_url(unescape(match.group(1)))
+
+
+def first_goodreads_book_url(html):
+    patterns = [
+        r'href=["\'](?P<value>/book/show/[^"\']+)["\']',
+        r'href=["\'](?P<value>https://www\.goodreads\.com/book/show/[^"\']+)["\']',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, html, re.IGNORECASE)
+        if match:
+            return absolute_goodreads_url(unescape(match.group("value")))
+    return ""
+
+
+def absolute_livelib_url(url):
+    if url.startswith("//"):
+        return f"https:{url}"
+    if url.startswith("/"):
+        return f"https://www.livelib.ru{url}"
+    return url
+
+
+def absolute_goodreads_url(url):
+    if url.startswith("//"):
+        return f"https:{url}"
+    if url.startswith("/"):
+        return f"https://www.goodreads.com{url}"
+    return url
+
+
+def parse_livelib_book_page(html):
+    json_data = parse_json_ld_book(html)
+    if json_data:
+        return json_data
+
+    title = meta_content(html, "og:title") or title_tag(html)
+    description = meta_content(html, "og:description") or meta_content(html, "description")
+    url = meta_content(html, "og:url")
+    rating = first_match(
+        html,
+        [
+            r'"ratingValue"\s*:\s*"?(?P<value>[0-9]+(?:[.,][0-9]+)?)',
+            r'itemprop=["\']ratingValue["\'][^>]*content=["\'](?P<value>[0-9]+(?:[.,][0-9]+)?)',
+        ],
+    )
+    return compact_book_info(
+        {
+            "title": clean_html_text(title),
+            "description": clean_html_text(description),
+            "rating": clean_html_text(rating),
+            "url": absolute_livelib_url(clean_html_text(url)) if url else "",
+        }
+    )
+
+
+def parse_json_ld_book(html):
+    scripts = re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        html,
+        re.IGNORECASE | re.DOTALL,
+    )
+    for script in scripts:
+        try:
+            data = json.loads(unescape(script).strip())
+        except json.JSONDecodeError:
+            continue
+        book = find_json_ld_book(data)
+        if not book:
+            continue
+        author = book.get("author", "")
+        if isinstance(author, list):
+            author = ", ".join(
+                clean_html_text(item.get("name", item)) if isinstance(item, dict) else clean_html_text(item)
+                for item in author
+            )
+        elif isinstance(author, dict):
+            author = author.get("name", "")
+        rating = book.get("aggregateRating", {})
+        if isinstance(rating, dict):
+            rating = rating.get("ratingValue", "")
+        return compact_book_info(
+            {
+                "title": clean_html_text(book.get("name", "")),
+                "author": clean_html_text(author),
+                "description": clean_html_text(book.get("description", "")),
+                "rating": clean_html_text(rating),
+                "url": absolute_livelib_url(clean_html_text(book.get("url", ""))),
+            }
+        )
+    return {}
+
+
+def find_json_ld_book(data):
+    if isinstance(data, list):
+        for item in data:
+            found = find_json_ld_book(item)
+            if found:
+                return found
+    if not isinstance(data, dict):
+        return None
+
+    item_type = data.get("@type")
+    if isinstance(item_type, list):
+        is_book = any(str(value).lower() == "book" for value in item_type)
+    else:
+        is_book = str(item_type).lower() == "book"
+    if is_book:
+        return data
+
+    graph = data.get("@graph")
+    if graph:
+        return find_json_ld_book(graph)
+    return None
+
+
+def meta_content(html, name):
+    patterns = [
+        rf'<meta[^>]+property=["\']{re.escape(name)}["\'][^>]+content=["\'](?P<value>.*?)["\']',
+        rf'<meta[^>]+name=["\']{re.escape(name)}["\'][^>]+content=["\'](?P<value>.*?)["\']',
+        rf'<meta[^>]+content=["\'](?P<value>.*?)["\'][^>]+(?:property|name)=["\']{re.escape(name)}["\']',
+    ]
+    return first_match(html, patterns)
+
+
+def title_tag(html):
+    return first_match(html, [r"<title[^>]*>(?P<value>.*?)</title>"])
+
+
+def first_match(text, patterns):
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        if match:
+            return match.group("value")
+    return ""
+
+
+def clean_html_text(value, limit=700):
+    text = unescape(str(value or ""))
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) > limit:
+        return text[:limit].rsplit(" ", 1)[0] + "..."
+    return text
+
+
+def compact_book_info(info):
+    return {key: value for key, value in info.items() if value}
+
+
+def icon_version():
+    try:
+        return str(max(path.stat().st_mtime_ns for path in ICONS_DIR.glob("*.png")))
+    except (OSError, ValueError):
+        return "1"
+
+
+def render_index_html():
+    return INDEX_HTML.replace("{{ICON_VERSION}}", icon_version())
+
+
 class LibraryHandler(BaseHTTPRequestHandler):
     server_version = "LibraryHTTP/1.0"
 
@@ -1132,6 +1561,21 @@ class LibraryHandler(BaseHTTPRequestHandler):
             content_type="application/json; charset=utf-8",
         )
 
+    def send_file(self, path):
+        try:
+            content = path.read_bytes()
+        except OSError:
+            self.send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
+            return
+
+        content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(content)
+
     def read_json_body(self):
         length = int(self.headers.get("Content-Length", "0") or "0")
         if length <= 0:
@@ -1144,10 +1588,24 @@ class LibraryHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/":
-            self.send_text(INDEX_HTML)
+            self.send_text(render_index_html())
+            return
+        if path.startswith("/icons/"):
+            icon_name = unquote(path.removeprefix("/icons/"))
+            icon_path = (ICONS_DIR / icon_name).resolve()
+            if ICONS_DIR.resolve() not in icon_path.parents or icon_path.suffix.lower() != ".png":
+                self.send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
+                return
+            self.send_file(icon_path)
             return
         if path == "/api/books":
             self.send_json(load_data())
+            return
+        if path == "/api/livelib":
+            query = parse_qs(urlparse(self.path).query)
+            title = query.get("title", [""])[0]
+            author = query.get("author", [""])[0]
+            self.send_json(fetch_book_info(title, author))
             return
         self.send_json({"error": "Not found"}, status=HTTPStatus.NOT_FOUND)
 
