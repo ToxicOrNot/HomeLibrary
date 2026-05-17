@@ -188,6 +188,32 @@ INDEX_HTML = """<!doctype html>
       display: none;
     }
 
+    .form-options {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .checkbox-label {
+      display: inline-flex;
+      grid-template-columns: none;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .checkbox-label input {
+      width: 18px;
+      min-height: 18px;
+      height: 18px;
+      padding: 0;
+      accent-color: var(--primary);
+    }
+
     button {
       min-height: 40px;
       border: 1px solid transparent;
@@ -626,6 +652,12 @@ INDEX_HTML = """<!doctype html>
           <button class="primary" type="submit" data-action="add" data-target="owned">Добавить в библиотеку</button>
           <button type="submit" data-action="add" data-target="wishlist">Добавить в желаемое</button>
         </div>
+        <div class="form-options" id="addOptions">
+          <label class="checkbox-label">
+            <input type="checkbox" id="keepAuthorSeries">
+            Не сбрасывать автора и цикл
+          </label>
+        </div>
         <div class="form-actions hidden" id="editActions">
           <button class="primary" type="submit" data-action="save">Сохранить изменения</button>
           <button type="button" id="cancelEdit">Отменить</button>
@@ -676,6 +708,7 @@ INDEX_HTML = """<!doctype html>
     const scrollTopButton = document.getElementById("scrollTop");
     const scrollTopIcon = document.getElementById("scrollTopIcon");
     const themeToggle = document.getElementById("themeToggle");
+    const keepAuthorSeries = document.getElementById("keepAuthorSeries");
     let editing = null;
 
     const iconVersion = "{{ICON_VERSION}}";
@@ -1001,10 +1034,23 @@ INDEX_HTML = """<!doctype html>
         method: "POST",
         body: JSON.stringify(payload)
       });
-      form.reset();
+      resetAfterAdd();
       form.title.focus();
       await loadBooks();
       showToast(`Книга добавлена в ${labels[target]}`);
+    }
+
+    function resetAfterAdd() {
+      const keepAuthor = keepAuthorSeries.checked;
+      const author = form.author.value;
+      const series = form.series.value;
+      form.reset();
+      keepAuthorSeries.checked = keepAuthor;
+      if (keepAuthor) {
+        form.author.value = author;
+        form.series.value = series;
+      }
+      updateSeriesOptions();
     }
 
     function currentPayload() {
@@ -1057,6 +1103,7 @@ INDEX_HTML = """<!doctype html>
       form.note.value = book.note || "";
       updateSeriesOptions();
       document.getElementById("addActions").classList.add("hidden");
+      document.getElementById("addOptions").classList.add("hidden");
       document.getElementById("editActions").classList.remove("hidden");
       form.title.focus();
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1065,8 +1112,10 @@ INDEX_HTML = """<!doctype html>
     function clearEditMode() {
       editing = null;
       form.reset();
+      keepAuthorSeries.checked = localStorage.getItem("keepAuthorSeries") === "true";
       document.getElementById("editActions").classList.add("hidden");
       document.getElementById("addActions").classList.remove("hidden");
+      document.getElementById("addOptions").classList.remove("hidden");
     }
 
     async function saveEditedBook() {
@@ -1184,6 +1233,10 @@ INDEX_HTML = """<!doctype html>
 
     form.author.addEventListener("input", updateSeriesOptions);
     form.author.addEventListener("change", updateSeriesOptions);
+    keepAuthorSeries.checked = localStorage.getItem("keepAuthorSeries") === "true";
+    keepAuthorSeries.addEventListener("change", () => {
+      localStorage.setItem("keepAuthorSeries", keepAuthorSeries.checked ? "true" : "false");
+    });
 
     themeToggle.addEventListener("click", () => {
       applyTheme(currentTheme() === "dark" ? "light" : "dark");
