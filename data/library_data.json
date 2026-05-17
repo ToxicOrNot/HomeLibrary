@@ -2555,6 +2555,15 @@
       "note": "",
       "rating_penguin": "",
       "rating_chick": ""
+    },
+    {
+      "title": "Разломы",
+      "author": "Мэтти Мансон",
+      "year": "",
+      "series": "",
+      "note": "",
+      "rating_penguin": "",
+      "rating_chick": ""
     }
   ],
   "wishlist": [
@@ -3179,5 +3188,6 @@
       "rating_penguin": "",
       "rating_chick": ""
     }
-  ]
+  ],
+  "series_counts": {}
 }
