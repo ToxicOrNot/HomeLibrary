@@ -902,9 +902,26 @@ INDEX_HTML = """<!doctype html>
       ).length;
     }
 
-    function renderSeriesHeading(author, series, visibleCount) {
+    function seriesListTotal(target, author, series) {
+      return state[target].filter((book) =>
+        (book.author || "Автор не указан") === author &&
+        (book.series || "Без цикла") === series
+      ).length;
+    }
+
+    function seriesCountLabel(target, author, series) {
+      const currentCount = seriesListTotal(target, author, series);
+      const otherTarget = target === "owned" ? "wishlist" : "owned";
+      const otherCount = seriesListTotal(otherTarget, author, series);
+      const otherLabel = target === "owned" ? "в желаемом" : "в библиотеке";
+      const extra = otherCount > 0 ? ` (${pluralBooks(otherCount)} ${otherLabel})` : "";
+      return `${pluralBooks(currentCount)}${extra}`;
+    }
+
+    function renderSeriesHeading(target, author, series, visibleCount) {
+      const countLabel = seriesCountLabel(target, author, series);
       if (series === "Без цикла") {
-        return `<div class="series-heading"><span>${escapeText(series)} · ${pluralBooks(visibleCount)}</span></div>`;
+        return `<div class="series-heading"><span>${escapeText(series)} · ${escapeText(countLabel)}</span></div>`;
       }
 
       const key = seriesKey(author, series);
@@ -916,7 +933,7 @@ INDEX_HTML = """<!doctype html>
 
       return `
         <div class="series-heading">
-          <span>${escapeText(series)} · ${pluralBooks(visibleCount)}</span>
+          <span>${escapeText(series)} · ${escapeText(countLabel)}</span>
           <span class="series-meta">
             <span>Книг в цикле</span>
             <input class="series-count-input" type="number" min="0" step="1"
@@ -948,7 +965,7 @@ INDEX_HTML = """<!doctype html>
             .sort(([seriesA], [seriesB]) => seriesA.localeCompare(seriesB, "ru", { numeric: true }))
             .map(([series, items]) => `
               <section class="series-group">
-                ${renderSeriesHeading(author, series, items.length)}
+                ${renderSeriesHeading(target, author, series, items.length)}
                 ${items.map(({ book, index }) => renderBook(target, book, index)).join("")}
               </section>
             `).join("");
