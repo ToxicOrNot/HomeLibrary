@@ -309,6 +309,15 @@ INDEX_HTML = """<!doctype html>
       margin: 12px 16px 0;
     }
 
+    .global-search-panel {
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+
+    .global-search-panel .search {
+      margin: 0;
+    }
+
     .list-tools {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -665,6 +674,10 @@ INDEX_HTML = """<!doctype html>
       </form>
     </section>
 
+    <section class="panel global-search-panel">
+      <input class="search" id="globalSearch" placeholder="Поиск по библиотеке и желаемому">
+    </section>
+
     <nav class="tabs" aria-label="Списки книг">
       <button class="active" type="button" data-tab="owned">Мои книги</button>
       <button type="button" data-tab="wishlist">Желаемое</button>
@@ -676,9 +689,6 @@ INDEX_HTML = """<!doctype html>
           <h2>Мои книги</h2>
           <span class="count" id="ownedCount">0 книг</span>
         </div>
-        <div class="list-tools">
-          <input class="search" id="ownedSearch" placeholder="Книга, автор или цикл">
-        </div>
         <div class="items" id="ownedList"></div>
       </article>
 
@@ -686,9 +696,6 @@ INDEX_HTML = """<!doctype html>
         <div class="list-head">
           <h2>Желаемое</h2>
           <span class="count" id="wishlistCount">0 книг</span>
-        </div>
-        <div class="list-tools">
-          <input class="search" id="wishlistSearch" placeholder="Книга, автор или цикл">
         </div>
         <div class="items" id="wishlistList"></div>
       </article>
@@ -709,6 +716,7 @@ INDEX_HTML = """<!doctype html>
     const scrollTopIcon = document.getElementById("scrollTopIcon");
     const themeToggle = document.getElementById("themeToggle");
     const keepAuthorSeries = document.getElementById("keepAuthorSeries");
+    const globalSearch = document.getElementById("globalSearch");
     let editing = null;
 
     const iconVersion = "{{ICON_VERSION}}";
@@ -981,7 +989,7 @@ INDEX_HTML = """<!doctype html>
 
     function renderList(target) {
       const list = document.getElementById(`${target}List`);
-      const query = document.getElementById(`${target}Search`).value.trim();
+      const query = globalSearch.value.trim();
       const books = state[target];
       const visible = books
         .map((book, index) => ({ book, index }))
@@ -1244,9 +1252,7 @@ INDEX_HTML = """<!doctype html>
 
     document.getElementById("cancelEdit").addEventListener("click", clearEditMode);
 
-    document.querySelectorAll(".search").forEach((input) => {
-      input.addEventListener("input", render);
-    });
+    globalSearch.addEventListener("input", render);
 
     form.author.addEventListener("input", updateSeriesOptions);
     form.author.addEventListener("change", updateSeriesOptions);
@@ -1368,6 +1374,47 @@ def normalize_rating(value):
     if 1 <= rating <= 10:
         return str(rating)
     return ""
+
+
+def normalize_duplicate_text(value):
+    return " ".join(str(value or "").casefold().split())
+
+
+def duplicate_book_location(data, book):
+    title = normalize_duplicate_text(book.get("title", ""))
+    author = normalize_duplicate_text(book.get("author", ""))
+    for target, label in (("owned", "библиотеке"), ("wishlist", "желаемом")):
+        for item in data.get(target, []):
+            if (
+                normalize_duplicate_text(item.get("title", "")) == title
+                and normalize_duplicate_text(item.get("author", "")) == author
+            ):
+                return label
+    return ""
+
+
+def existing_series_name(data, author, series):
+    normalized_author = normalize_duplicate_text(author)
+    normalized_series = normalize_duplicate_text(series)
+    if not normalized_series:
+        return ""
+
+    for target in VALID_LISTS:
+        for item in data.get(target, []):
+            if (
+                normalize_duplicate_text(item.get("author", "")) == normalized_author
+                and normalize_duplicate_text(item.get("series", "")) == normalized_series
+                and item.get("series", "").strip()
+            ):
+                return item.get("series", "").strip()
+    return ""
+
+
+def apply_existing_series_name(data, book):
+    existing = existing_series_name(data, book.get("author", ""), book.get("series", ""))
+    if existing:
+        book["series"] = existing
+    return book
 
 
 def normalize_series_counts(value):
@@ -1890,6 +1937,15 @@ class LibraryHandler(BaseHTTPRequestHandler):
             return
 
         data = load_data()
+        duplicate_location = duplicate_book_location(data, book)
+        if duplicate_location:
+            self.send_json(
+                {"error": f"Такая книга уже есть в {duplicate_location}."},
+                status=HTTPStatus.CONFLICT,
+            )
+            return
+
+        book = apply_existing_series_name(data, book)
         data[target].append(book)
         save_data(data)
         self.send_json(data, status=HTTPStatus.CREATED)
@@ -1916,6 +1972,7 @@ class LibraryHandler(BaseHTTPRequestHandler):
             self.send_json({"error": "Book not found"}, status=HTTPStatus.NOT_FOUND)
             return
 
+        book = apply_existing_series_name(data, book)
         data[target][index] = book
         save_data(data)
         self.send_json(data)
