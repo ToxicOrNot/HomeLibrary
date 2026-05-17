@@ -143,6 +143,44 @@ def upload_backup(
     github_request(token, url, method="PUT", payload=payload)
 
 
+def restore_from_github(data_file: Path) -> str:
+    token = get_config("GITHUB_TOKEN")
+    repo = get_config("GITHUB_REPOSITORY") or get_config("GITHUB_REPO")
+    if not token:
+        set_status("GitHub restore skipped: GITHUB_TOKEN is not configured.")
+        return "skipped"
+    if not repo:
+        set_status("GitHub restore skipped: GITHUB_REPOSITORY is not configured.")
+        return "skipped"
+
+    branch = get_config("GITHUB_BRANCH", "main")
+    backup_path = get_config("GITHUB_BACKUP_PATH", default_backup_path(data_file))
+    url = f"https://api.github.com/repos/{repo}/contents/{backup_path}?ref={branch}"
+
+    try:
+        response = github_request(token, url)
+    except HTTPError as error:
+        if error.code == 404:
+            set_status(f"GitHub restore skipped: remote file not found: {repo}/{backup_path}.")
+            return "missing"
+        raise
+
+    encoded = str(response.get("content", "")).replace("\n", "")
+    if not encoded:
+        set_status(f"GitHub restore skipped: remote file is empty: {repo}/{backup_path}.")
+        return "missing"
+
+    content = base64.b64decode(encoded)
+    json.loads(content.decode("utf-8"))
+
+    data_file.parent.mkdir(parents=True, exist_ok=True)
+    temp_file = data_file.with_suffix(data_file.suffix + ".tmp")
+    temp_file.write_bytes(content)
+    temp_file.replace(data_file)
+    set_status(f"GitHub restore completed: {repo}/{backup_path}.")
+    return "restored"
+
+
 def safe_backup_if_due(data_file: Path, force: bool = False) -> bool:
     try:
         return backup_if_due(data_file, force=force)
@@ -153,3 +191,15 @@ def safe_backup_if_due(data_file: Path, force: bool = False) -> bool:
     except (OSError, URLError, TimeoutError, json.JSONDecodeError) as error:
         set_status(f"GitHub backup failed: {error}")
         return False
+
+
+def safe_restore_from_github(data_file: Path) -> str:
+    try:
+        return restore_from_github(data_file)
+    except HTTPError as error:
+        details = error.read().decode("utf-8", errors="replace")
+        set_status(f"GitHub restore failed: HTTP {error.code}. {details[:300]}")
+        return "failed"
+    except (OSError, URLError, TimeoutError, json.JSONDecodeError, ValueError) as error:
+        set_status(f"GitHub restore failed: {error}")
+        return "failed"

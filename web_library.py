@@ -12,7 +12,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote_plus, unquote, urlparse
 from urllib.request import Request, urlopen
 
-from github_backup import safe_backup_if_due
+from github_backup import safe_backup_if_due, safe_restore_from_github
 
 DATA_DIR = Path(__file__).with_name("data")
 DATA_FILE = Path(os.environ.get("DATA_FILE", DATA_DIR / "library_data.json"))
@@ -1927,7 +1927,9 @@ class LibraryHandler(BaseHTTPRequestHandler):
 def main():
     lan_ip = get_lan_ip()
     migrate_legacy_data_file()
-    safe_backup_if_due(DATA_FILE)
+    restore_status = safe_restore_from_github(DATA_FILE)
+    if restore_status in {"skipped", "missing"}:
+        safe_backup_if_due(DATA_FILE)
     server = ThreadingHTTPServer((HOST, PORT), LibraryHandler)
     print("Library server is running.")
     print(f"Open on this computer: http://127.0.0.1:{PORT}")
