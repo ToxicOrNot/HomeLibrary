@@ -1343,13 +1343,43 @@ def load_data():
     return data
 
 
-def save_data(data):
+def save_data(data, backup=True):
+    data["series_counts"] = normalize_series_counts(data.get("series_counts", {}))
     DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
     DATA_FILE.write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    safe_backup_if_due(DATA_FILE, force=True)
+    if backup:
+        safe_backup_if_due(DATA_FILE, force=True)
+
+
+def ensure_data_file_schema(backup=True):
+    data = load_data()
+    changed = False
+
+    if "series_counts" not in data:
+        data["series_counts"] = {}
+        changed = True
+
+    if not data["series_counts"]:
+        legacy_counts = load_legacy_series_counts()
+        if legacy_counts:
+            data["series_counts"] = legacy_counts
+            changed = True
+
+    if changed or not DATA_FILE.exists():
+        save_data(data, backup=backup)
+
+
+def load_legacy_series_counts():
+    if not LEGACY_DATA_FILE.exists():
+        return {}
+    try:
+        raw = json.loads(LEGACY_DATA_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return normalize_series_counts(raw.get("series_counts", {}))
 
 
 def migrate_legacy_data_file():
@@ -1928,6 +1958,7 @@ def main():
     lan_ip = get_lan_ip()
     migrate_legacy_data_file()
     restore_status = safe_restore_from_github(DATA_FILE)
+    ensure_data_file_schema(backup=restore_status != "failed")
     if restore_status in {"skipped", "missing"}:
         safe_backup_if_due(DATA_FILE)
     server = ThreadingHTTPServer((HOST, PORT), LibraryHandler)
