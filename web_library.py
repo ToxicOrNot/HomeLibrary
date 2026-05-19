@@ -49,6 +49,9 @@ INDEX_HTML = """<!doctype html>
       --success-line: #b7dfc8;
       --danger-bg: #fff1ef;
       --danger-line: #f4c7c0;
+      --warning-bg: #fff7ed;
+      --warning-line: #fed7aa;
+      --warning: #c2410c;
       --focus: rgba(75, 85, 99, 0.18);
       --primary: #374151;
       --primary-dark: #111827;
@@ -73,6 +76,9 @@ INDEX_HTML = """<!doctype html>
       --success-line: #2f6848;
       --danger-bg: #3b1d1d;
       --danger-line: #704040;
+      --warning-bg: #431f0c;
+      --warning-line: #9a3412;
+      --warning: #fdba74;
       --focus: rgba(203, 213, 225, 0.22);
       --primary: #d1d5db;
       --primary-dark: #f9fafb;
@@ -447,6 +453,17 @@ INDEX_HTML = """<!doctype html>
       border-radius: 7px;
       background: var(--success-bg);
       color: var(--ok);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .ongoing-badge {
+      padding: 4px 7px;
+      border: 1px solid var(--warning-line);
+      border-radius: 7px;
+      background: var(--warning-bg);
+      color: var(--warning);
       font-size: 12px;
       font-weight: 800;
       white-space: nowrap;
@@ -935,8 +952,10 @@ INDEX_HTML = """<!doctype html>
       const key = seriesKey(author, series);
       const expected = Number(state.series_counts[key] || 0);
       const total = seriesTotal(author, series);
-      const done = expected > 0 && expected === total
+      const status = expected > 0 && expected === total
         ? `<span class="complete-badge">Цикл завершен</span>`
+        : expected > total
+          ? `<span class="ongoing-badge">Ongoing</span>`
         : "";
 
       return `
@@ -948,7 +967,7 @@ INDEX_HTML = """<!doctype html>
               value="${expected || ""}"
               data-author="${escapeText(author)}"
               data-series="${escapeText(series)}">
-            ${done}
+            ${status}
           </span>
         </div>
       `;
