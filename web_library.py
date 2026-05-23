@@ -154,7 +154,7 @@ INDEX_HTML = """<!doctype html>
 
     .form-grid {
       display: grid;
-      grid-template-columns: minmax(180px, 1.2fr) minmax(150px, 1fr) 110px minmax(150px, 1fr) minmax(180px, 1fr);
+      grid-template-columns: minmax(220px, 1.2fr) minmax(170px, 1fr) minmax(170px, 1fr) minmax(120px, 0.45fr);
       gap: 10px;
     }
 
@@ -190,7 +190,7 @@ INDEX_HTML = """<!doctype html>
       margin-top: 12px;
     }
 
-    .form-actions.hidden {
+    .hidden {
       display: none;
     }
 
@@ -218,6 +218,10 @@ INDEX_HTML = """<!doctype html>
       height: 18px;
       padding: 0;
       accent-color: var(--primary);
+    }
+
+    .series-count-field input {
+      max-width: 120px;
     }
 
     button {
@@ -663,15 +667,12 @@ INDEX_HTML = """<!doctype html>
             <input id="author" name="author" maxlength="140" list="authorOptions">
             <datalist id="authorOptions"></datalist>
           </label>
-          <label>Год
-            <input id="year" name="year" inputmode="numeric" maxlength="20">
-          </label>
           <label>Цикл
             <input id="series" name="series" maxlength="160" placeholder="Если есть" list="seriesOptions">
             <datalist id="seriesOptions"></datalist>
           </label>
-          <label>Заметка
-            <input id="note" name="note" maxlength="240">
+          <label class="series-count-field" id="seriesCountField">Книг в цикле
+            <input id="seriesCount" name="series_count" type="number" min="0" step="1" inputmode="numeric" disabled>
           </label>
         </div>
         <div class="form-actions" id="addActions">
@@ -734,6 +735,7 @@ INDEX_HTML = """<!doctype html>
     const themeToggle = document.getElementById("themeToggle");
     const keepAuthorSeries = document.getElementById("keepAuthorSeries");
     const globalSearch = document.getElementById("globalSearch");
+    const seriesCountField = document.getElementById("seriesCountField");
     let editing = null;
 
     const iconVersion = "{{ICON_VERSION}}";
@@ -851,6 +853,15 @@ INDEX_HTML = """<!doctype html>
         ? books.filter((book) => book.author === selectedAuthor)
         : books;
       renderOptions("seriesOptions", uniqueSorted(source.map((book) => book.series)));
+      updateSeriesCountInput();
+    }
+
+    function updateSeriesCountInput() {
+      const hasSeries = Boolean(form.series.value.trim());
+      form.seriesCount.disabled = !hasSeries;
+      if (!hasSeries) {
+        form.seriesCount.value = "";
+      }
     }
 
     function updateFormOptions() {
@@ -859,7 +870,7 @@ INDEX_HTML = """<!doctype html>
     }
 
     function renderBook(target, book, index) {
-        const meta = [book.author, book.year].filter(Boolean).join(" · ");
+        const meta = [book.author].filter(Boolean).join(" · ");
         const series = book.series ? `<div class="meta">Цикл: ${escapeText(book.series)}</div>` : "";
         const moveButton = target === "wishlist"
           ? `<button class="success" type="button" data-action="move" data-index="${index}">Перенести в библиотеку</button>`
@@ -883,7 +894,6 @@ INDEX_HTML = """<!doctype html>
             <h3 class="book-title">${escapeText(book.title)}</h3>
             ${meta ? `<div class="meta">${escapeText(meta)}</div>` : ""}
             ${series}
-            ${book.note ? `<div class="note">${escapeText(book.note)}</div>` : ""}
             <div class="book-actions">
               ${ratingControls}
               ${moveButton}
@@ -1088,11 +1098,13 @@ INDEX_HTML = """<!doctype html>
       const keepAuthor = keepAuthorSeries.checked;
       const author = form.author.value;
       const series = form.series.value;
+      const seriesCount = form.seriesCount.value;
       form.reset();
       keepAuthorSeries.checked = keepAuthor;
       if (keepAuthor) {
         form.author.value = author;
         form.series.value = series;
+        form.seriesCount.value = seriesCount;
       }
       updateSeriesOptions();
     }
@@ -1101,9 +1113,8 @@ INDEX_HTML = """<!doctype html>
       return {
         title: form.title.value.trim(),
         author: form.author.value.trim(),
-        year: form.year.value.trim(),
         series: form.series.value.trim(),
-        note: form.note.value.trim()
+        series_count: form.seriesCount.disabled ? "" : form.seriesCount.value.trim()
       };
     }
 
@@ -1142,12 +1153,12 @@ INDEX_HTML = """<!doctype html>
       editing = { target, index };
       form.title.value = book.title || "";
       form.author.value = book.author || "";
-      form.year.value = book.year || "";
       form.series.value = book.series || "";
-      form.note.value = book.note || "";
+      form.seriesCount.value = "";
       updateSeriesOptions();
       document.getElementById("addActions").classList.add("hidden");
       document.getElementById("addOptions").classList.add("hidden");
+      seriesCountField.classList.add("hidden");
       document.getElementById("editActions").classList.remove("hidden");
       form.title.focus();
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1160,6 +1171,8 @@ INDEX_HTML = """<!doctype html>
       document.getElementById("editActions").classList.add("hidden");
       document.getElementById("addActions").classList.remove("hidden");
       document.getElementById("addOptions").classList.remove("hidden");
+      seriesCountField.classList.remove("hidden");
+      updateSeriesCountInput();
     }
 
     async function saveEditedBook() {
@@ -1275,6 +1288,9 @@ INDEX_HTML = """<!doctype html>
 
     form.author.addEventListener("input", updateSeriesOptions);
     form.author.addEventListener("change", updateSeriesOptions);
+    form.series.addEventListener("input", updateSeriesCountInput);
+    form.series.addEventListener("change", updateSeriesCountInput);
+    updateSeriesCountInput();
     keepAuthorSeries.checked = localStorage.getItem("keepAuthorSeries") === "true";
     keepAuthorSeries.addEventListener("change", () => {
       localStorage.setItem("keepAuthorSeries", keepAuthorSeries.checked ? "true" : "false");
@@ -1372,9 +1388,7 @@ def normalize_book(item):
     return {
         "title": str(item.get("title", "")).strip(),
         "author": str(item.get("author", "")).strip(),
-        "year": str(item.get("year", "")).strip(),
         "series": str(item.get("series", "")).strip(),
-        "note": str(item.get("note", "")).strip(),
         "rating_penguin": normalize_rating(
             item.get("rating_penguin", item.get("rating", ""))
         ),
@@ -1434,6 +1448,25 @@ def apply_existing_series_name(data, book):
     if existing:
         book["series"] = existing
     return book
+
+
+def apply_series_count_from_body(data, book, body):
+    raw_count = str(body.get("series_count", "") or "").strip()
+    if not raw_count or not book.get("series", "").strip():
+        return True
+
+    try:
+        count = int(raw_count)
+    except ValueError:
+        return False
+
+    key = series_key(book.get("author", ""), book.get("series", ""))
+    data.setdefault("series_counts", {})
+    if count > 0:
+        data["series_counts"][key] = count
+    else:
+        data["series_counts"].pop(key, None)
+    return True
 
 
 def normalize_series_counts(value):
@@ -1965,6 +1998,10 @@ class LibraryHandler(BaseHTTPRequestHandler):
             return
 
         book = apply_existing_series_name(data, book)
+        if not apply_series_count_from_body(data, book, body):
+            self.send_json({"error": "Series count must be a number"}, status=HTTPStatus.BAD_REQUEST)
+            return
+
         data[target].append(book)
         save_data(data)
         self.send_json(data, status=HTTPStatus.CREATED)
