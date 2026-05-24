@@ -2827,6 +2827,13 @@
       "series": "Капучино с маршмэллоу",
       "rating_penguin": "",
       "rating_chick": ""
+    },
+    {
+      "title": "1",
+      "author": "Woorie",
+      "series": "Смысл",
+      "rating_penguin": "",
+      "rating_chick": ""
     }
   ],
   "wishlist": [
@@ -3348,6 +3355,7 @@
     "Пак Хёнсук\u001fРесторан Кумихо": 4,
     "Мэтт Динниман\u001fDungeon Crawler Carl": 8,
     "Мария Протас\u001fДёшево и сердито (комикс)": 3,
-    "Woorie\u001fКапучино с маршмэллоу": 3
+    "Woorie\u001fКапучино с маршмэллоу": 3,
+    "Woorie\u001fСмысл": 3
   }
 }
