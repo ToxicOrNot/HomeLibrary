@@ -3226,6 +3226,13 @@
       "series": "Любовь в красивых декорациях",
       "rating_penguin": "",
       "rating_chick": ""
+    },
+    {
+      "title": "Лабиринты памяти",
+      "author": "Кристина Робер",
+      "series": "Преданные",
+      "rating_penguin": "",
+      "rating_chick": ""
     }
   ],
   "wishlist": [
@@ -3625,13 +3632,6 @@
       "title": "Замок",
       "author": "Франц Кафка",
       "series": "",
-      "rating_penguin": "",
-      "rating_chick": ""
-    },
-    {
-      "title": "Лабиринты памяти",
-      "author": "Кристина Робер",
-      "series": "Преданные",
       "rating_penguin": "",
       "rating_chick": ""
     }
