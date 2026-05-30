@@ -326,6 +326,45 @@ INDEX_HTML = """<!doctype html>
 
     .global-search-panel .search {
       margin: 0;
+      padding-right: 38px;
+    }
+
+    .search-wrap {
+      position: relative;
+    }
+
+    .clear-search {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      width: 28px;
+      min-width: 28px;
+      height: 28px;
+      min-height: 28px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--muted);
+      font-size: 20px;
+      line-height: 1;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-50%);
+      transition: opacity 0.15s ease, background 0.15s ease;
+    }
+
+    .clear-search.show {
+      opacity: 0.45;
+      pointer-events: auto;
+    }
+
+    .clear-search.show:hover {
+      opacity: 0.8;
+      background: var(--button);
     }
 
     .list-tools {
@@ -539,6 +578,19 @@ INDEX_HTML = """<!doctype html>
       text-align: center;
     }
 
+    .load-more {
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+      padding: 8px 0 2px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .load-more button {
+      min-width: 180px;
+    }
+
     .toast {
       position: fixed;
       left: 50%;
@@ -693,7 +745,10 @@ INDEX_HTML = """<!doctype html>
     </section>
 
     <section class="panel global-search-panel">
-      <input class="search" id="globalSearch" placeholder="Поиск по библиотеке и желаемому">
+      <div class="search-wrap">
+        <input class="search" id="globalSearch" placeholder="Поиск по библиотеке и желаемому">
+        <button class="clear-search" type="button" id="clearSearch" title="Очистить поиск" aria-label="Очистить поиск">×</button>
+      </div>
     </section>
 
     <nav class="tabs" aria-label="Списки книг">
@@ -727,6 +782,9 @@ INDEX_HTML = """<!doctype html>
 
   <script>
     const state = { owned: [], wishlist: [], series_counts: {} };
+    const INITIAL_RENDER_LIMIT = 12;
+    const RENDER_LIMIT_STEP = 12;
+    const renderLimits = { owned: INITIAL_RENDER_LIMIT, wishlist: INITIAL_RENDER_LIMIT };
     const labels = { owned: "библиотеку", wishlist: "желаемое" };
     const form = document.getElementById("bookForm");
     const toast = document.getElementById("toast");
@@ -735,6 +793,7 @@ INDEX_HTML = """<!doctype html>
     const themeToggle = document.getElementById("themeToggle");
     const keepAuthorSeries = document.getElementById("keepAuthorSeries");
     const globalSearch = document.getElementById("globalSearch");
+    const clearSearch = document.getElementById("clearSearch");
     const seriesCountField = document.getElementById("seriesCountField");
     let editing = null;
 
@@ -983,7 +1042,7 @@ INDEX_HTML = """<!doctype html>
       `;
     }
 
-    function renderAuthorSeriesTree(target, visible) {
+    function renderAuthorSeriesTree(target, visible, limit) {
       const authorGroups = new Map();
       visible.forEach((item) => {
         const author = item.book.author || "Автор не указан";
@@ -994,26 +1053,51 @@ INDEX_HTML = """<!doctype html>
         seriesGroups.get(series).push(item);
       });
 
-      return Array.from(authorGroups.entries())
-        .sort(([authorA], [authorB]) => authorA.localeCompare(authorB, "ru", { numeric: true }))
-        .map(([author, seriesGroups]) => {
-          const total = Array.from(seriesGroups.values()).reduce((sum, items) => sum + items.length, 0);
-          const seriesHtml = Array.from(seriesGroups.entries())
-            .sort(([seriesA], [seriesB]) => seriesA.localeCompare(seriesB, "ru", { numeric: true }))
-            .map(([series, items]) => `
+      let renderedSeries = 0;
+      let renderedBooks = 0;
+      const html = [];
+      const authors = Array.from(authorGroups.entries())
+        .sort(([authorA], [authorB]) => authorA.localeCompare(authorB, "ru", { numeric: true }));
+      const totalSeries = authors.reduce((sum, [, seriesGroups]) => sum + seriesGroups.size, 0);
+
+      for (const [author, seriesGroups] of authors) {
+        if (renderedSeries >= limit) break;
+
+        const renderedSeriesHtml = [];
+        let authorRenderedTotal = 0;
+        const seriesEntries = Array.from(seriesGroups.entries())
+          .sort(([seriesA], [seriesB]) => seriesA.localeCompare(seriesB, "ru", { numeric: true }));
+
+        for (const [series, items] of seriesEntries) {
+          if (renderedSeries >= limit) break;
+          renderedSeries += 1;
+          renderedBooks += items.length;
+          authorRenderedTotal += items.length;
+          renderedSeriesHtml.push(`
               <section class="series-group">
                 ${renderSeriesHeading(target, author, series, items.length)}
                 ${items.map(({ book, index }) => renderBook(target, book, index)).join("")}
               </section>
-            `).join("");
+          `);
+        }
 
-          return `
+        if (renderedSeriesHtml.length) {
+          html.push(`
             <section class="book-group">
-              <div class="group-heading">${escapeText(author)} · ${pluralBooks(total)}</div>
-              ${seriesHtml}
+              <div class="group-heading">${escapeText(author)} · ${pluralBooks(authorRenderedTotal)}</div>
+              ${renderedSeriesHtml.join("")}
             </section>
-          `;
-        }).join("");
+          `);
+        }
+      }
+
+      return {
+        html: html.join(""),
+        renderedSeries,
+        renderedBooks,
+        totalSeries,
+        totalBooks: visible.length
+      };
     }
 
     function renderList(target) {
@@ -1023,7 +1107,6 @@ INDEX_HTML = """<!doctype html>
       const visible = books
         .map((book, index) => ({ book, index }))
         .filter((item) => bookMatches(item.book, query));
-      const sorted = sortedItems(visible);
 
       document.getElementById(`${target}Count`).textContent = pluralBooks(books.length);
 
@@ -1032,13 +1115,25 @@ INDEX_HTML = """<!doctype html>
         return;
       }
 
-      list.innerHTML = renderAuthorSeriesTree(target, visible);
+      const rendered = renderAuthorSeriesTree(target, visible, renderLimits[target]);
+      const more = rendered.totalSeries > rendered.renderedSeries
+        ? `
+            <div class="load-more">
+              <div>Показано ${pluralBooks(rendered.renderedBooks)} из ${pluralBooks(rendered.totalBooks)}</div>
+              <button type="button" data-action="show-more" data-target="${target}">
+                Показать ещё
+              </button>
+            </div>
+          `
+        : "";
+      list.innerHTML = rendered.html + more;
     }
 
     function render() {
       updateFormOptions();
       renderList("owned");
       renderList("wishlist");
+      clearSearch.classList.toggle("show", Boolean(globalSearch.value.trim()));
       document.getElementById("status").textContent =
         `В библиотеке: ${state.owned.length} | В желаемом: ${state.wishlist.length}`;
     }
@@ -1284,7 +1379,19 @@ INDEX_HTML = """<!doctype html>
 
     document.getElementById("cancelEdit").addEventListener("click", clearEditMode);
 
-    globalSearch.addEventListener("input", render);
+    globalSearch.addEventListener("input", () => {
+      renderLimits.owned = INITIAL_RENDER_LIMIT;
+      renderLimits.wishlist = INITIAL_RENDER_LIMIT;
+      render();
+    });
+
+    clearSearch.addEventListener("click", () => {
+      globalSearch.value = "";
+      renderLimits.owned = INITIAL_RENDER_LIMIT;
+      renderLimits.wishlist = INITIAL_RENDER_LIMIT;
+      render();
+      globalSearch.focus();
+    });
 
     form.author.addEventListener("input", updateSeriesOptions);
     form.author.addEventListener("change", updateSeriesOptions);
@@ -1343,6 +1450,10 @@ INDEX_HTML = """<!doctype html>
       }
       if (button.dataset.action === "info") {
         showLiveLibInfo(button.dataset.target, index).catch((error) => showToast(error.message));
+      }
+      if (button.dataset.action === "show-more") {
+        renderLimits[button.dataset.target] += RENDER_LIMIT_STEP;
+        renderList(button.dataset.target);
       }
     });
 
