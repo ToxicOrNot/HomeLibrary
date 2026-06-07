@@ -3681,6 +3681,13 @@
       "series": "Система для друзей",
       "rating_penguin": "",
       "rating_chick": ""
+    },
+    {
+      "title": "Да здравствует принц",
+      "author": "Фрэнсис Кель",
+      "series": "Песнь сорокопута",
+      "rating_penguin": "",
+      "rating_chick": ""
     }
   ],
   "wishlist": [
@@ -3940,13 +3947,6 @@
       "title": "Полет сорок",
       "author": "К. Дж. Чарльз",
       "series": "Сороки",
-      "rating_penguin": "",
-      "rating_chick": ""
-    },
-    {
-      "title": "Да здравствует принц",
-      "author": "Фрэнсис Кель",
-      "series": "Песнь сорокопута",
       "rating_penguin": "",
       "rating_chick": ""
     },
